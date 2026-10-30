@@ -1,0 +1,63 @@
+name: Xamine
+options:
+  bundleIdPrefix: com.xamine
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Xamine:
+    type: application
+    platform: macOS
+    sources:
+      - Xamine
+    info:
+      path: Xamine/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: xamine
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: Xamine/Resources/Xamine.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xamine.Xamine
+        PRODUCT_NAME: Xamine
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: 2R8MRUP265
+        GENERATE_INFOPLIST_FILE: false
+  XamineTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - XamineTests
+    dependencies:
+      - target: Xamine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xamine.XamineTests
+        GENERATE_INFOPLIST_FILE: true
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: 2R8MRUP265
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Xamine.app/Contents/MacOS/Xamine"
+schemes:
+  Xamine:
+    build:
+      targets:
+        Xamine: all
+        XamineTests: [test]
+    test:
+      targets:
+        - XamineTests
