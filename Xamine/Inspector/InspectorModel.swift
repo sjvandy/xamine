@@ -14,7 +14,12 @@ final class InspectorModel {
     private(set) var tree: UITree?
     private(set) var isLoading = false
     private(set) var errorMessage: String?
-    private(set) var toast: String?
+    struct Toast: Equatable {
+        let message: String
+        let symbol: String
+    }
+
+    private(set) var toast: Toast?
 
     var selectedID: Int? {
         didSet {
@@ -53,24 +58,37 @@ final class InspectorModel {
         errorMessage = nil
         defer { isLoading = false }
 
-        // The window may have moved since it was picked.
-        if let bounds = Self.currentBounds(of: target.windowID) {
-            target = PickedWindow(pid: target.pid, windowID: target.windowID, bounds: bounds,
-                                  appName: target.appName, bundleID: target.bundleID, title: target.title)
+        // An app window may have moved since it was picked.
+        if target.isAppWindow, let bounds = Self.currentBounds(of: target.windowID) {
+            target.bounds = bounds
             self.target = target
         }
 
-        async let capture = try? WindowCapture.capture(windowID: target.windowID)
+        let picked = target
+        async let capture = try? WindowCapture.capture(picked)
         do {
-            let tree = try await HierarchyScanner.scan(target)
-            self.image = await capture
+            let tree = try await HierarchyScanner.scan(picked)
+            let image = await capture
+            if let image { self.image = image }
             self.tree = tree
+            // System UI picked by position may belong to another process than the window under it.
+            target.pid = tree.pid
+            target.appName = tree.appName
+            target.bundleID = tree.bundleID
+            self.target = target
             if resetExpansion || expandedIDs.isEmpty {
                 expandedIDs = Set(tree.nodes.filter { $0.depth < 5 && !$0.childIDs.isEmpty }.map(\.id))
             }
             if let selectedID, selectedID >= tree.nodes.count { self.selectedID = nil }
         } catch {
-            self.image = await capture
+            let image = await capture
+            if !resetExpansion, tree != nil {
+                // Transient UI (menus, Spotlight, Control Center) is usually gone by the time of a re-scan;
+                // keep what was captured rather than wiping it.
+                showToast("Couldn't re-scan — it may have closed", symbol: "exclamationmark.triangle.fill")
+                return
+            }
+            self.image = image
             self.tree = nil
             errorMessage = error.localizedDescription
         }
@@ -192,7 +210,11 @@ final class InspectorModel {
 
     func copy(_ text: String, message: String = "Copied") {
         Clipboard.copy(text)
-        toast = message
+        showToast(message)
+    }
+
+    func showToast(_ message: String, symbol: String = "checkmark.circle.fill") {
+        toast = Toast(message: message, symbol: symbol)
         toastTask?.cancel()
         toastTask = Task {
             try? await Task.sleep(for: .seconds(1.6))

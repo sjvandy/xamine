@@ -20,7 +20,7 @@ struct InspectorView: View {
         }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
-                ToastView(message: toast)
+                ToastView(message: toast.message, symbol: toast.symbol)
                     .padding(.bottom, 24)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

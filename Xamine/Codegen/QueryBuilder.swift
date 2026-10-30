@@ -185,7 +185,9 @@ struct QueryBuilder {
 
     /// The query that the first hierarchy step hangs off.
     private var rootExpression: String {
-        tree.platform == .macOS ? "app.windows.firstMatch" : "app"
+        // System UI roots (menu bar, desktop, Control Center) aren't always windows.
+        guard tree.platform == .macOS else { return "app" }
+        return "app.\(tree.root?.kind.queryName ?? "windows").firstMatch"
     }
 
     /// Nodes from just below the query root down to `id`, inclusive.
@@ -205,7 +207,7 @@ struct QueryBuilder {
     }
 
     func breadcrumb(for id: Int) -> String {
-        let rootName = tree.platform == .macOS ? "Window" : "App"
+        let rootName = tree.platform == .macOS ? tree.root?.kind.displayName ?? "Window" : "App"
         let parts = [rootName] + chain(to: id).map { "\($0.kind.displayName) \(siblingIndex(of: $0) + 1)" }
         return parts.joined(separator: " ▸ ")
     }

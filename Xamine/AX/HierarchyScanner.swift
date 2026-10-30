@@ -3,25 +3,43 @@ import AppKit
 
 /// A window chosen in the picker.
 struct PickedWindow: Hashable, Sendable {
-    let pid: pid_t
-    let windowID: CGWindowID
+    static let desktopLayer = Int(CGWindowLevelForKey(.desktopIconWindow))
+
+    var pid: pid_t
+    /// 0 for the desktop, which has no single window.
+    var windowID: CGWindowID
     /// Global coordinates, top-left origin.
-    let bounds: CGRect
-    let appName: String
-    let bundleID: String?
-    let title: String?
+    var bounds: CGRect
+    var appName: String
+    var bundleID: String?
+    var title: String?
+    /// CoreGraphics window layer: 0 for normal app windows, higher for system UI (menu bar, Dock, Spotlight…).
+    var layer: Int = 0
+    /// Where the cursor was when this was picked; used to find system UI that isn't listed as an app window.
+    var anchor: CGPoint?
 
     var isSimulator: Bool { bundleID == "com.apple.iphonesimulator" }
+    var isDesktop: Bool { windowID == 0 }
+    /// A regular app window, which can be found through the app's window list and captured on its own.
+    var isAppWindow: Bool { layer == 0 && windowID != 0 }
+
+    func anchored(at point: CGPoint) -> PickedWindow {
+        var copy = self
+        copy.anchor = point
+        return copy
+    }
 }
 
 enum ScanError: LocalizedError {
     case notTrusted
     case windowNotFound
+    case nothingUnderCursor
 
     var errorDescription: String? {
         switch self {
         case .notTrusted: "xamine needs Accessibility permission to read other apps' UI."
         case .windowNotFound: "Couldn't find that window in the app's accessibility tree. The app may not expose accessibility information."
+        case .nothingUnderCursor: "Nothing under the cursor exposes accessibility information. If it was a menu or panel, it may have closed."
         }
     }
 }
@@ -32,26 +50,27 @@ enum HierarchyScanner {
     static let maxNodes = 15_000
 
     static func scan(_ target: PickedWindow) async throws -> UITree {
-        var nodes = try await pass(target, enhanced: false)
+        var result = try await pass(target, enhanced: false)
 
         // Web views (WebKit, Chromium, Electron) build their accessibility tree lazily, the first time an
         // assistive app asks. The first pass then sees large empty placeholder groups, so re-read a few times.
         var retries = 0
-        while retries < 4, hasUnpopulatedContainers(nodes) {
+        while retries < 4, hasUnpopulatedContainers(result.nodes) {
             retries += 1
             try await Task.sleep(for: .milliseconds(350))
-            let previousCount = nodes.count
-            nodes = try await pass(target, enhanced: true)
-            if retries > 1, nodes.count == previousCount { break }
+            let previousCount = result.nodes.count
+            result = try await pass(target, enhanced: true)
+            if retries > 1, result.nodes.count == previousCount { break }
         }
-        return makeTree(nodes, for: target)
+        return makeTree(result.nodes, pid: result.pid, for: target)
     }
 
-    /// One walk of the window, off the main actor.
-    private static func pass(_ target: PickedWindow, enhanced: Bool) async throws -> [UINode] {
+    /// One walk of the window, off the main actor. Returns the nodes and the pid that actually owns them.
+    private static func pass(_ target: PickedWindow, enhanced: Bool) async throws -> (nodes: [UINode], pid: pid_t) {
         try await Task.detached(priority: .userInitiated) {
             guard AXIsProcessTrusted() else { throw ScanError.notTrusted }
-            let app = AXElement.application(pid: target.pid)
+            let (root, pid) = try findRoot(for: target)
+            let app = AXElement.application(pid: pid)
             // Chromium and Electron only expose web content once this is set; WebKit ignores it.
             app.set("AXManualAccessibility", true)
             // Asks apps (and WebKit) to build their full tree, as VoiceOver does. Some apps change behavior
@@ -60,12 +79,27 @@ enum HierarchyScanner {
             if enhanced { app.set("AXEnhancedUserInterface", true) }
             defer { if enhanced { app.set("AXEnhancedUserInterface", previousEnhanced ?? false) } }
 
-            guard let window = findWindow(in: app, matching: target) else { throw ScanError.windowNotFound }
             var nodes: [UINode] = []
             nodes.reserveCapacity(1024)
-            visit(window, parentID: nil, depth: 0, into: &nodes)
-            return nodes
+            visit(root, parentID: nil, depth: 0, into: &nodes)
+            return (nodes, pid)
         }.value
+    }
+
+    /// The element to walk from. App windows come from the app's window list; system UI (menu bar extras,
+    /// Control Center, Spotlight, the desktop) often isn't listed there, so it is found from the element
+    /// under the cursor by climbing to its top-level container.
+    private static func findRoot(for target: PickedWindow) throws -> (AXElement, pid_t) {
+        if target.isAppWindow, let window = findWindow(in: AXElement.application(pid: target.pid), matching: target) {
+            return (window, target.pid)
+        }
+        if let anchor = target.anchor, let hit = AXElement.at(anchor) {
+            return (hit.topLevelContainer, hit.pid ?? target.pid)
+        }
+        if let window = findWindow(in: AXElement.application(pid: target.pid), matching: target) {
+            return (window, target.pid)
+        }
+        throw target.isAppWindow ? ScanError.windowNotFound : ScanError.nothingUnderCursor
     }
 
     /// Whether the tree has big containers with no children — the signature of web content not yet loaded.
@@ -77,11 +111,15 @@ enum HierarchyScanner {
         }
     }
 
-    private static func makeTree(_ nodes: [UINode], for target: PickedWindow) -> UITree {
+    private static func makeTree(_ nodes: [UINode], pid: pid_t, for target: PickedWindow) -> UITree {
+        // System UI picked by position may belong to a different process than the window under it
+        // (e.g. the menu bar is drawn by the Window Server but its items belong to apps).
+        let owner = pid == target.pid ? nil : NSRunningApplication(processIdentifier: pid)
         var tree = UITree(
             nodes: nodes,
-            appName: target.appName,
-            bundleID: target.bundleID,
+            appName: owner?.localizedName ?? target.appName,
+            bundleID: owner?.bundleIdentifier ?? target.bundleID,
+            pid: pid,
             platform: target.isSimulator ? .iOSSimulator : .macOS,
             windowFrame: target.bounds
         )

@@ -10,13 +10,22 @@ enum DebugDump {
         guard let index = args.firstIndex(of: "--dump"), args.count > index + 2 else { return false }
         let bundleID = args[index + 1]
         let output = URL(fileURLWithPath: args[index + 2])
+        // `--dump at <x> <y> <path>` scans whatever is at that screen point instead, like the hands-off picker.
+        let atPoint: CGPoint? = bundleID == "at" && args.count > index + 4
+            ? CGPoint(x: Double(args[index + 2]) ?? 0, y: Double(args[index + 3]) ?? 0) : nil
+        let outputURL = atPoint == nil ? output : URL(fileURLWithPath: args[index + 4])
 
         Task {
             var text = ""
-            if let target = frontWindow(of: bundleID) {
+            let target = atPoint.map {
+                PickedWindow(pid: 0, windowID: 0, bounds: CGRect(origin: .zero, size: CGSize(width: 1, height: 1)),
+                             appName: "?", layer: 1, anchor: $0)
+            } ?? frontWindow(of: bundleID)
+            if let target {
                 do {
                     let start = Date()
                     let tree = try await HierarchyScanner.scan(target)
+                    text += "app: \(tree.appName) \(tree.bundleID ?? "")\n"
                     text += "nodes: \(tree.nodes.count) in \(String(format: "%.2f", Date().timeIntervalSince(start)))s\n"
                     for node in tree.nodes {
                         let attrs = [
@@ -32,7 +41,7 @@ enum DebugDump {
             } else {
                 text = "no window for \(bundleID)\n"
             }
-            try? text.write(to: output, atomically: true, encoding: .utf8)
+            try? text.write(to: outputURL, atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
         }
         return true

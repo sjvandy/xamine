@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import SwiftUI
 
 /// App-wide coordinator: owns the picker, the inspector window and permissions.
@@ -10,13 +11,16 @@ final class AppState {
     private(set) var recents: [PickedWindow] = []
 
     @ObservationIgnored private let picker = WindowPickerController()
-    @ObservationIgnored private var hotKey: HotKey?
+    @ObservationIgnored private var hotKeys: [HotKey] = []
     @ObservationIgnored private var inspectorWindow: NSWindow?
     @ObservationIgnored private var onboardingWindow: NSWindow?
     @ObservationIgnored private var windowCloseObserver: NSObjectProtocol?
 
     func didLaunch() {
-        hotKey = HotKey { [weak self] in self?.startPicking() }
+        hotKeys = [
+            HotKey { [weak self] in self?.startPicking() },
+            HotKey(modifiers: cmdKey | shiftKey | optionKey) { [weak self] in self?.startHandsOff(delay: 0) },
+        ]
         if !permissions.allGranted {
             showOnboarding()
         } else if UserDefaults.standard.bool(forKey: "pickOnLaunch") {
@@ -36,12 +40,34 @@ final class AppState {
         }
     }
 
+    /// Inspects what's under the cursor without taking focus, so Spotlight, Control Center and open menus stay open.
+    func startHandsOff(delay: Int) {
+        permissions.refresh()
+        guard permissions.allGranted else {
+            showOnboarding()
+            return
+        }
+        picker.startHandsOff(delay: delay) { [weak self] picked in
+            guard let self else { return }
+            if let picked { inspect(picked) }
+        }
+    }
+
     func inspect(_ target: PickedWindow) {
-        recents.removeAll { $0.windowID == target.windowID }
-        recents.insert(target, at: 0)
-        recents = Array(recents.prefix(5))
-        showInspector()
-        Task { await inspector.load(target) }
+        if target.isAppWindow {
+            recents.removeAll { $0.windowID == target.windowID }
+            recents.insert(target, at: 0)
+            recents = Array(recents.prefix(5))
+            showInspector()
+            Task { await inspector.load(target) }
+        } else {
+            // System UI closes as soon as xamine takes focus, so read it before showing the inspector.
+            Task {
+                try? await Task.sleep(for: .milliseconds(60)) // let the picker overlay leave the screen
+                await inspector.load(target)
+                showInspector()
+            }
+        }
     }
 
     // MARK: - Windows

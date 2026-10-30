@@ -35,6 +35,9 @@ private struct MenuContent: View {
     var body: some View {
         Button("Inspect Application…") { state.startPicking() }
             .keyboardShortcut("x", modifiers: [.command, .shift])
+        Button("Inspect Under Cursor") { state.startHandsOff(delay: 0) }
+            .keyboardShortcut("x", modifiers: [.command, .shift, .option])
+        Button("Inspect Under Cursor in 5 Seconds") { state.startHandsOff(delay: 5) }
 
         if state.inspector.target != nil {
             Button("Show Inspector") { state.showInspector() }
@@ -67,7 +70,8 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Toggle("Start picking a window when xamine launches", isOn: $pickOnLaunch)
-            LabeledContent("Inspect shortcut", value: "⌘⇧X")
+            LabeledContent("Pick a window", value: "⌘⇧X")
+            LabeledContent("Inspect under cursor (Spotlight, Control Center, menus)", value: "⌥⌘⇧X")
         }
         .formStyle(.grouped)
         .frame(width: 420)

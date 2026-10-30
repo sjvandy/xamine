@@ -8,13 +8,18 @@ enum CaptureError: LocalizedError {
     }
 }
 
-/// Captures a single window, independent of what overlaps it.
+/// Captures what was picked: a single app window on its own, or the screen region under system UI.
 enum WindowCapture {
-    static func capture(windowID: CGWindowID) async throws -> CGImage {
+    static func capture(_ target: PickedWindow) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
-            throw CaptureError.windowNotShareable
+        if target.isAppWindow, let window = content.windows.first(where: { $0.windowID == target.windowID }) {
+            return try await capture(window: window)
         }
+        return try await capture(region: target.bounds, desktopOnly: target.isDesktop, from: content)
+    }
+
+    /// One window, independent of what overlaps it.
+    private static func capture(window: SCWindow) async throws -> CGImage {
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
         let scale = CGFloat(filter.pointPixelScale)
@@ -23,6 +28,33 @@ enum WindowCapture {
         config.showsCursor = false
         config.ignoreShadowsSingleWindow = true
         config.shouldBeOpaque = false
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    /// A region of the display, as it appears on screen minus xamine's own windows. System UI such as
+    /// Control Center is often several windows composited together, so a region captures it as seen.
+    /// For the desktop, only desktop-level windows (wallpaper, icons, widgets) are included.
+    private static func capture(region: CGRect, desktopOnly: Bool, from content: SCShareableContent) async throws -> CGImage {
+        guard let display = content.displays.first(where: { $0.frame.contains(CGPoint(x: region.midX, y: region.midY)) })
+            ?? content.displays.first else { throw CaptureError.windowNotShareable }
+
+        let filter: SCContentFilter
+        if desktopOnly {
+            let desktopWindows = content.windows.filter { $0.windowLayer < 0 }
+            filter = SCContentFilter(display: display, including: desktopWindows)
+        } else {
+            let ownPID = ProcessInfo.processInfo.processIdentifier
+            let ourApps = content.applications.filter { $0.processID == ownPID }
+            filter = SCContentFilter(display: display, excludingApplications: ourApps, exceptingWindows: [])
+        }
+
+        let config = SCStreamConfiguration()
+        let scale = CGFloat(filter.pointPixelScale)
+        let local = region.intersection(display.frame).offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+        config.sourceRect = local
+        config.width = Int(local.width * scale)
+        config.height = Int(local.height * scale)
+        config.showsCursor = false
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 }

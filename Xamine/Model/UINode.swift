@@ -47,6 +47,7 @@ struct UITree: Sendable {
     var nodes: [UINode]
     var appName: String
     var bundleID: String?
+    var pid: pid_t = 0
     var platform: TargetPlatform
     /// Frame of the captured window in global coordinates; screenshot pixel (0,0) corresponds to its origin.
     var windowFrame: CGRect

@@ -47,6 +47,40 @@ struct AXElement {
         return value
     }
 
+    /// The deepest element at a global point (top-left origin), from any app.
+    static func at(_ point: CGPoint) -> AXElement? {
+        let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, 1.0)
+        var element: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &element) == .success,
+              let element else { return nil }
+        AXUIElementSetMessagingTimeout(element, 1.0)
+        return AXElement(raw: element)
+    }
+
+    var pid: pid_t? {
+        var pid: pid_t = 0
+        return AXUIElementGetPid(raw, &pid) == .success ? pid : nil
+    }
+
+    var parent: AXElement? {
+        guard let value = attribute(kAXParentAttribute), CFGetTypeID(value as CFTypeRef) == AXUIElementGetTypeID() else { return nil }
+        return AXElement(raw: value as! AXUIElement)
+    }
+
+    var role: String? { attribute(kAXRoleAttribute) as? String }
+
+    /// The outermost ancestor below the application element: a window, menu bar, menu, or similar.
+    var topLevelContainer: AXElement {
+        var current = self
+        var steps = 0
+        while let parent = current.parent, parent.role != kAXApplicationRole, steps < 200 {
+            current = parent
+            steps += 1
+        }
+        return current
+    }
+
     func set(_ name: String, _ value: Bool) {
         AXUIElementSetAttributeValue(raw, name as CFString, (value ? kCFBooleanTrue : kCFBooleanFalse) as CFTypeRef)
     }
