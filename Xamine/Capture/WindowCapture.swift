@@ -11,11 +11,18 @@ enum CaptureError: LocalizedError {
 /// Captures what was picked: a single app window on its own, or the screen region under system UI.
 enum WindowCapture {
     static func capture(_ target: PickedWindow) async throws -> CGImage {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        if target.isAppWindow, let window = content.windows.first(where: { $0.windowID == target.windowID }) {
-            return try await capture(window: window)
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            if target.isAppWindow, let window = content.windows.first(where: { $0.windowID == target.windowID }) {
+                Log.capture.notice("capturing window \(target.windowID)")
+                return try await capture(window: window)
+            }
+            Log.capture.notice("capturing region \(String(describing: target.bounds), privacy: .public) desktopOnly=\(target.isDesktop)")
+            return try await capture(region: target.bounds, desktopOnly: target.isDesktop, from: content)
+        } catch {
+            Log.capture.error("capture failed: \(error.localizedDescription, privacy: .public)")
+            throw error
         }
-        return try await capture(region: target.bounds, desktopOnly: target.isDesktop, from: content)
     }
 
     /// One window, independent of what overlaps it.

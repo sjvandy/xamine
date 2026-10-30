@@ -81,6 +81,7 @@ final class InspectorModel {
             }
             if let selectedID, selectedID >= tree.nodes.count { self.selectedID = nil }
         } catch {
+            Log.scan.error("scan failed: \(error.localizedDescription, privacy: .public)")
             let image = await capture
             if !resetExpansion, tree != nil {
                 // Transient UI (menus, Spotlight, Control Center) is usually gone by the time of a re-scan;

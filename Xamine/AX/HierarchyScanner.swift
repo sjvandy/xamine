@@ -62,6 +62,7 @@ enum HierarchyScanner {
             result = try await pass(target, enhanced: true)
             if retries > 1, result.nodes.count == previousCount { break }
         }
+        Log.scan.notice("scanned \(result.nodes.count) nodes from pid \(result.pid) after \(retries) retries")
         return makeTree(result.nodes, pid: result.pid, for: target)
     }
 
@@ -91,11 +92,15 @@ enum HierarchyScanner {
     /// under the cursor by climbing to its top-level container.
     private static func findRoot(for target: PickedWindow) throws -> (AXElement, pid_t) {
         if target.isAppWindow, let window = findWindow(in: AXElement.application(pid: target.pid), matching: target) {
+            Log.scan.notice("root: app window of pid \(target.pid)")
             return (window, target.pid)
         }
         if let anchor = target.anchor, let hit = AXElement.at(anchor) {
-            return (hit.topLevelContainer, hit.pid ?? target.pid)
+            let root = hit.topLevelContainer
+            Log.scan.notice("root: hit \(hit.role ?? "?", privacy: .public) pid=\(hit.pid ?? -1) -> top \(root.role ?? "?", privacy: .public) frame=\(String(describing: root.frame), privacy: .public)")
+            return (root, hit.pid ?? target.pid)
         }
+        Log.scan.notice("root: nothing at anchor \(String(describing: target.anchor), privacy: .public); trying window list of pid \(target.pid)")
         if let window = findWindow(in: AXElement.application(pid: target.pid), matching: target) {
             return (window, target.pid)
         }

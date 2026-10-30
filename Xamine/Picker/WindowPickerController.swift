@@ -60,6 +60,8 @@ final class WindowPickerController {
         guard delay > 0 else {
             self.completion = completion
             candidates = Self.onScreenWindows()
+            Self.logCandidates(candidates)
+            isHandsOff = true
             updateHover()
             finish(selecting: true)
             return
@@ -98,6 +100,7 @@ final class WindowPickerController {
         hidden.forEach { $0.orderOut(nil) }
 
         candidates = Self.onScreenWindows()
+        Self.logCandidates(candidates)
         panels = NSScreen.screens.map { screen in
             let panel = PickerPanel(screen: screen, controller: self, passive: handsOff)
             panel.orderFrontRegardless()
@@ -122,6 +125,9 @@ final class WindowPickerController {
     func finish(selecting: Bool) {
         if selecting { updateHover() }
         let result = selecting ? hovered?.window : nil
+        if let result {
+            Log.picker.notice("picked \(result.appName, privacy: .public) pid=\(result.pid) layer=\(result.layer) window=\(result.windowID) bounds=\(String(describing: result.bounds), privacy: .public) anchor=\(String(describing: result.anchor), privacy: .public) handsOff=\(self.isHandsOff)")
+        }
         trackingTimer?.invalidate()
         trackingTimer = nil
         panels.forEach { $0.orderOut(nil) }
@@ -189,6 +195,13 @@ final class WindowPickerController {
             return Candidate(window: window,
                              icon: owner == "Window Server" ? NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: nil) : app?.icon,
                              hitFrames: hitFrames)
+        }
+    }
+
+    private static func logCandidates(_ candidates: [Candidate]) {
+        for candidate in candidates {
+            let window = candidate.window
+            Log.picker.notice("candidate \(window.appName, privacy: .public) layer=\(window.layer) bounds=\(String(describing: window.bounds), privacy: .public) pieces=\(String(describing: candidate.hitFrames), privacy: .public)")
         }
     }
 

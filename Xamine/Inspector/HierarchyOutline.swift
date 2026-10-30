@@ -6,6 +6,8 @@ struct HierarchyOutline: View {
 
     var body: some View {
         if let tree = model.tree {
+            // Context menus can be rendered off the main thread, so they get value copies, not the model.
+            let builder = model.builder
             ScrollViewReader { proxy in
                 List(model.visibleRows, selection: $model.selectedID) { row in
                     HierarchyRow(
@@ -20,7 +22,7 @@ struct HierarchyOutline: View {
                     .onHover { inside in
                         if inside { model.hoveredID = row.id } else if model.hoveredID == row.id { model.hoveredID = nil }
                     }
-                    .contextMenu { contextMenu(for: tree.node(row.id)) }
+                    .contextMenu { contextMenu(for: tree.node(row.id), builder: builder) }
                 }
                 .listStyle(.inset)
                 .environment(\.defaultMinListRowHeight, 22)
@@ -44,14 +46,14 @@ struct HierarchyOutline: View {
         }
     }
 
-    @ViewBuilder private func contextMenu(for node: UINode) -> some View {
+    @ViewBuilder private func contextMenu(for node: UINode, builder: QueryBuilder?) -> some View {
         if let identifier = node.identifier.nonEmpty {
             Button("Copy Identifier") { model.copy(identifier, message: "Copied identifier") }
         }
         if let text = node.displayText {
             Button("Copy Label") { model.copy(text, message: "Copied label") }
         }
-        if let queries = model.builder?.queries(for: node.id) {
+        if let queries = builder?.queries(for: node.id) {
             Divider()
             if let byIdentifier = queries.byIdentifier {
                 Button("Copy Identifier Query") { model.copy(byIdentifier.code, message: "Copied identifier query") }

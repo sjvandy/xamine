@@ -62,11 +62,15 @@ struct ElementDetail: View {
     }
 
     private var options: some View {
-        HStack {
+        let platform = model.tree?.platform ?? .macOS
+        return HStack {
+            // Plain items rather than a ForEach: SwiftUI can build menu items later off the main thread, and a
+            // main-actor ForEach closure then traps (Swift 6 isolation check).
             Picker("Action", selection: $model.snippetAction) {
-                ForEach(SnippetAction.allCases) { action in
-                    Text(action.title(for: model.tree?.platform ?? .macOS)).tag(action)
-                }
+                Text(SnippetAction.none.title(for: platform)).tag(SnippetAction.none)
+                Text(SnippetAction.interact.title(for: platform)).tag(SnippetAction.interact)
+                Text(SnippetAction.waitForExistence.title(for: platform)).tag(SnippetAction.waitForExistence)
+                Text(SnippetAction.exists.title(for: platform)).tag(SnippetAction.exists)
             }
             .pickerStyle(.menu)
             .fixedSize()
