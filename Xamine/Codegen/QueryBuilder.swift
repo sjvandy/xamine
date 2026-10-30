@@ -24,6 +24,11 @@ struct Snippet: Equatable, Sendable {
 struct GeneratedQueries: Equatable, Sendable {
     /// `nil` when the element has no identifier, label, or other matchable text.
     var byIdentifier: Snippet?
+    /// Starts at the closest container whose element type occurs once in the window.
+    var fromContainer: Snippet
+    /// Starts at the closest container that has, or directly holds, a uniquely identified element.
+    var fromAnchor: Snippet?
+    /// The full path from the window.
     var byHierarchy: Snippet
     /// e.g. "Window ▸ Group 1 ▸ Button 2"
     var breadcrumb: String
@@ -38,6 +43,8 @@ struct QueryBuilder {
     func queries(for id: Int) -> GeneratedQueries {
         GeneratedQueries(
             byIdentifier: identifierSnippet(for: tree.node(id)),
+            fromContainer: containerSnippet(for: id),
+            fromAnchor: anchoredSnippet(for: id),
             byHierarchy: hierarchySnippet(for: id),
             breadcrumb: breadcrumb(for: id)
         )
@@ -58,7 +65,7 @@ struct QueryBuilder {
         let query = "app.\(node.kind.queryName)"
 
         if let key = node.bestKey {
-            let matches = matchingNodes(kind: node.kind) { $0.identifier == key || $0.title == key || $0.label == key }
+            let matches = keyMatches(kind: node.kind, key: key)
             var note: String?
             if node.identifier.nonEmpty == nil {
                 note = "No accessibility identifier — matched by \(node.title.nonEmpty != nil ? "title" : "label")."
@@ -97,13 +104,83 @@ struct QueryBuilder {
     // MARK: - By hierarchy
 
     func hierarchySnippet(for id: Int) -> Snippet {
-        let steps = chain(to: id)
-        var lines = [rootExpression]
+        Snippet(code: wrap(expression(from: rootExpression, steps: chain(to: id))), note: nil)
+    }
+
+    /// `app.scrollViews.firstMatch.children(...)…` from the deepest container (or the element itself)
+    /// whose type is unique in the window. Falls back to the full path.
+    func containerSnippet(for id: Int) -> Snippet {
+        let path = chain(to: id)
+        for (position, candidate) in path.enumerated().reversed() {
+            guard nodesInScope(where: { $0.kind.typeName == candidate.kind.typeName }).count == 1 else { continue }
+            let start = "app.\(candidate.kind.queryName).firstMatch"
+            let note = "Starts at the only \(candidate.kind.displayName.lowercased()) in this window."
+            return Snippet(code: wrap(expression(from: start, steps: Array(path.suffix(from: position + 1)))), note: note)
+        }
+        return Snippet(code: wrap(expression(from: rootExpression, steps: path)),
+                       note: "No container type is unique in this window, so this is the full path.")
+    }
+
+    /// Starts from the closest container that is itself uniquely identified, or that directly holds a child with a
+    /// unique accessibility identifier (via `containing(_:identifier:)`). `nil` if no such container exists.
+    func anchoredSnippet(for id: Int) -> Snippet? {
+        let path = chain(to: id)
+        // Walk up from the element's parent; the element's own key is already covered by the identifier query.
+        for position in stride(from: path.count - 2, through: -1, by: -1) {
+            let container = position >= 0 ? path[position] : tree.node(tree.queryRootID)
+            let steps = Array(path.suffix(from: position + 1))
+
+            if position >= 0, let key = container.bestKey,
+               keyMatches(kind: container.kind, key: key).count == 1 {
+                let start = "app.\(container.kind.queryName)[\(Self.literal(key))]"
+                let source = container.identifier.nonEmpty != nil ? "identifier" : "label"
+                return Snippet(code: wrap(expression(from: start, steps: steps)),
+                               note: "Anchored to the \(container.kind.displayName.lowercased()) with \(source) “\(key)”.")
+            }
+
+            let onPath = steps.first?.id
+            for sibling in tree.children(of: container.id) where sibling.id != onPath {
+                guard let key = sibling.identifier.nonEmpty,
+                      nodesInScope(where: { $0.kind.typeName == sibling.kind.typeName && $0.identifier == key }).count == 1
+                else { continue }
+                // Every container of this type that holds that element somewhere below it, in document order.
+                let holders = nodesInScope { $0.kind.typeName == container.kind.typeName && contains($0.id, kind: sibling.kind, identifier: key) }
+                let index = holders.firstIndex(of: container.id) ?? 0
+                let tail = holders.count <= 1 ? ".firstMatch" : ".element(boundBy: \(index))"
+                let start = "app.\(container.kind.queryName).containing(.\(sibling.kind.typeName), identifier: \(Self.literal(key)))\(tail)"
+                return Snippet(code: wrap(expression(from: start, steps: steps)),
+                               note: "Anchored to the \(container.kind.displayName.lowercased()) holding \(sibling.kind.displayName.lowercased()) “\(key)”.")
+            }
+        }
+        return nil
+    }
+
+    private func expression(from start: String, steps: [UINode]) -> String {
+        var lines = [start]
         for node in steps {
             lines.append("    .children(matching: .\(node.kind.typeName)).element(boundBy: \(siblingIndex(of: node)))")
         }
-        let expression = lines.count == 1 ? lines[0] : lines.joined(separator: "\n")
-        return Snippet(code: wrap(expression), note: nil)
+        return lines.joined(separator: "\n")
+    }
+
+    private func nodesInScope(where predicate: (UINode) -> Bool) -> [Int] {
+        tree.nodes.filter { tree.isInQueryScope($0.id) && predicate($0) }.map(\.id)
+    }
+
+    /// Nodes of `kind` whose identifier, title or label equals `key` — what XCUITest's subscript matches.
+    private func keyMatches(kind: ElementKind, key: String) -> [Int] {
+        nodesInScope { $0.kind.typeName == kind.typeName && ($0.identifier == key || $0.title == key || $0.label == key) }
+    }
+
+    /// Whether a descendant of `id` has the given type and accessibility identifier.
+    private func contains(_ id: Int, kind: ElementKind, identifier: String) -> Bool {
+        var stack = tree.node(id).childIDs
+        while let next = stack.popLast() {
+            let node = tree.node(next)
+            if node.kind.typeName == kind.typeName && node.identifier == identifier { return true }
+            stack.append(contentsOf: node.childIDs)
+        }
+        return false
     }
 
     /// The query that the first hierarchy step hangs off.

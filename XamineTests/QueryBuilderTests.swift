@@ -32,6 +32,19 @@ private let sample = makeTree([
     (5, "AXButton", nil, nil),               // 7
 ])
 
+/// Mirrors the Tips search results: a single scroll view inside an identified split group.
+private let tips = makeTree([
+    (nil, "AXWindow", "Tips", "Tips"),                    // 0
+    (0, "AXGroup", nil, nil),                             // 1
+    (1, "AXSplitGroup", "Tips, SplitView", nil),          // 2
+    (2, "AXGroup", nil, nil),                             // 3
+    (3, "AXScrollArea", nil, nil),                        // 4
+    (4, "AXStaticText", nil, nil),                        // 5
+    (4, "AXStaticText", nil, nil),                        // 6
+    (4, "AXStaticText", nil, nil),                        // 7
+    (1, "AXGroup", nil, nil),                             // 8
+])
+
 @Suite struct QueryBuilderTests {
     let builder = QueryBuilder(tree: sample, includeAppDeclaration: false)
 
@@ -92,6 +105,44 @@ private let sample = makeTree([
         #expect(builder.identifierSnippet(for: tree.node(2))?.code == "let app = XCUIApplication()\napp.buttons[\"Log In\"].tap()")
         #expect(builder.hierarchySnippet(for: 2).code.hasSuffix("app\n    .children(matching: .button).element(boundBy: 0).tap()"))
         #expect(builder.breadcrumb(for: 2) == "App ▸ Button 1")
+    }
+
+    @Test func containerQueryStartsAtUniqueType() {
+        let builder = QueryBuilder(tree: tips, includeAppDeclaration: false)
+        #expect(builder.containerSnippet(for: 7).code == """
+        app.scrollViews.firstMatch
+            .children(matching: .staticText).element(boundBy: 2)
+        """)
+        // The scroll view itself needs no steps.
+        #expect(builder.containerSnippet(for: 4).code == "app.scrollViews.firstMatch")
+    }
+
+    @Test func containerQueryFallsBackToFullPath() {
+        let snippet = builder.containerSnippet(for: 4)
+        #expect(snippet.code == builder.hierarchySnippet(for: 4).code)
+        #expect(snippet.note?.contains("full path") == true)
+    }
+
+    @Test func anchoredQueryUsesIdentifiedAncestor() {
+        let builder = QueryBuilder(tree: tips, includeAppDeclaration: false)
+        #expect(builder.anchoredSnippet(for: 6)?.code == """
+        app.splitGroups["Tips, SplitView"]
+            .children(matching: .group).element(boundBy: 0)
+            .children(matching: .scrollView).element(boundBy: 0)
+            .children(matching: .staticText).element(boundBy: 1)
+        """)
+    }
+
+    @Test func anchoredQueryUsesIdentifiedSibling() {
+        // The "Cancel" button sits next to "saveButton" in the first group.
+        #expect(builder.anchoredSnippet(for: 4)?.code == """
+        app.groups.containing(.button, identifier: "saveButton").firstMatch
+            .children(matching: .button).element(boundBy: 1)
+        """)
+    }
+
+    @Test func anchoredQueryIsNilWithoutAnchors() {
+        #expect(builder.anchoredSnippet(for: 7) == nil)
     }
 
     @Test func escapesStringLiterals() {

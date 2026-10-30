@@ -18,13 +18,21 @@ struct ElementDetail: View {
                         copy: { model.copy($0, message: "Copied identifier query") }
                     )
                     CommandCard(
-                        title: "By hierarchy",
-                        symbol: "list.bullet.indent",
-                        snippet: queries.byHierarchy,
+                        title: "From unique container",
+                        symbol: "square.stack.3d.down.right",
+                        snippet: queries.fromContainer,
                         emptyMessage: "",
-                        copy: { model.copy($0, message: "Copied hierarchy query") }
+                        copy: { model.copy($0, message: "Copied container query") }
                     )
-                    .help("Indexes count siblings of the same type. XCTest sometimes skips accessibility nodes the raw tree shows, so prefer identifier queries when one exists.")
+                    .help("Hierarchy steps from the closest container whose type appears once in the window. Indexes count siblings of the same type; XCTest sometimes skips accessibility nodes the raw tree shows.")
+                    CommandCard(
+                        title: "From identified anchor",
+                        symbol: "scope",
+                        snippet: queries.fromAnchor,
+                        emptyMessage: "No container above this element has, or directly holds, a uniquely identified element.",
+                        copy: { model.copy($0, message: "Copied anchored query") }
+                    )
+                    .help("Hierarchy steps from the closest container that has a unique identifier or label, or that directly holds a child with a unique identifier.")
                     attributes(node)
                 }
                 .padding(14)

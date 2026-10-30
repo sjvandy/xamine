@@ -181,8 +181,10 @@ final class InspectorModel {
         guard let queries = selectedQueries else { return }
         if let byIdentifier = queries.byIdentifier {
             copy(byIdentifier.code, message: "Copied identifier query")
+        } else if let fromAnchor = queries.fromAnchor {
+            copy(fromAnchor.code, message: "Copied anchored query")
         } else {
-            copy(queries.byHierarchy.code, message: "Copied hierarchy query")
+            copy(queries.fromContainer.code, message: "Copied container query")
         }
     }
 

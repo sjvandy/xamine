@@ -56,7 +56,11 @@ struct HierarchyOutline: View {
             if let byIdentifier = queries.byIdentifier {
                 Button("Copy Identifier Query") { model.copy(byIdentifier.code, message: "Copied identifier query") }
             }
-            Button("Copy Hierarchy Query") { model.copy(queries.byHierarchy.code, message: "Copied hierarchy query") }
+            Button("Copy Container Query") { model.copy(queries.fromContainer.code, message: "Copied container query") }
+            if let fromAnchor = queries.fromAnchor {
+                Button("Copy Anchored Query") { model.copy(fromAnchor.code, message: "Copied anchored query") }
+            }
+            Button("Copy Full Path from Window") { model.copy(queries.byHierarchy.code, message: "Copied full path") }
         }
         Divider()
         Button("Expand All Below") { expandAll(below: node.id) }
