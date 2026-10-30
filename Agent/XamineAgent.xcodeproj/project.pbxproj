@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		36D3B23F0251E4D1CE964951 /* XamineAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CC6CAF38BD47B4C2D15AFF /* XamineAgentTests.swift */; };
+		E242387E2E152F943F01B01E /* AgentHostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33AA5BE1C126A7B28C872A5F /* AgentHostApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CDCB6E4748C50EE19CBDAD5B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F9113C0A38BD13A586313DE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 76B6D39D4012ABF8335BF5E2;
+			remoteInfo = XamineAgent;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		25CC6CAF38BD47B4C2D15AFF /* XamineAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XamineAgentTests.swift; sourceTree = "<group>"; };
+		33AA5BE1C126A7B28C872A5F /* AgentHostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHostApp.swift; sourceTree = "<group>"; };
+		71169B5F93448828B15AE02F /* XamineAgent.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = XamineAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8217659A7011212AE58E3698 /* XamineAgentUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = XamineAgentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		066D27976A3D0279AD324FB1 = {
+			isa = PBXGroup;
+			children = (
+				2539B5E43190DD80BB41F336 /* Host */,
+				EE0EAFBE916E71A1EE0EF536 /* UITests */,
+				567C556F50465695D2AD33AF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2539B5E43190DD80BB41F336 /* Host */ = {
+			isa = PBXGroup;
+			children = (
+				33AA5BE1C126A7B28C872A5F /* AgentHostApp.swift */,
+			);
+			path = Host;
+			sourceTree = "<group>";
+		};
+		567C556F50465695D2AD33AF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				71169B5F93448828B15AE02F /* XamineAgent.app */,
+				8217659A7011212AE58E3698 /* XamineAgentUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EE0EAFBE916E71A1EE0EF536 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				25CC6CAF38BD47B4C2D15AFF /* XamineAgentTests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		63932898DA8CB16A2DAC7EE1 /* XamineAgentUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 14A1C8508FF9786E4EA730EB /* Build configuration list for PBXNativeTarget "XamineAgentUITests" */;
+			buildPhases = (
+				80242EE56B955F97AB50361F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0DF76237E0A88E95417AE6C7 /* PBXTargetDependency */,
+			);
+			name = XamineAgentUITests;
+			packageProductDependencies = (
+			);
+			productName = XamineAgentUITests;
+			productReference = 8217659A7011212AE58E3698 /* XamineAgentUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		76B6D39D4012ABF8335BF5E2 /* XamineAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B08B6BF981F34DEA3E38596 /* Build configuration list for PBXNativeTarget "XamineAgent" */;
+			buildPhases = (
+				B96E9A368307FC70ED65216F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = XamineAgent;
+			packageProductDependencies = (
+			);
+			productName = XamineAgent;
+			productReference = 71169B5F93448828B15AE02F /* XamineAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8F9113C0A38BD13A586313DE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					63932898DA8CB16A2DAC7EE1 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 76B6D39D4012ABF8335BF5E2;
+					};
+					76B6D39D4012ABF8335BF5E2 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 05881BD7A739F7DA898DC6B8 /* Build configuration list for PBXProject "XamineAgent" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 066D27976A3D0279AD324FB1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 567C556F50465695D2AD33AF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				76B6D39D4012ABF8335BF5E2 /* XamineAgent */,
+				63932898DA8CB16A2DAC7EE1 /* XamineAgentUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		80242EE56B955F97AB50361F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				36D3B23F0251E4D1CE964951 /* XamineAgentTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B96E9A368307FC70ED65216F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E242387E2E152F943F01B01E /* AgentHostApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0DF76237E0A88E95417AE6C7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 76B6D39D4012ABF8335BF5E2 /* XamineAgent */;
+			targetProxy = CDCB6E4748C50EE19CBDAD5B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		02138A38850539B8BD8E04E6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "xamine agent";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENT_BUNDLE_PREFIX)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		226318AD63CA2EAC1581FC55 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENT_BUNDLE_PREFIX).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = XamineAgent;
+			};
+			name = Release;
+		};
+		312AA121CD2F1098F194F0F7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENT_BUNDLE_PREFIX).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = XamineAgent;
+			};
+			name = Debug;
+		};
+		3C1E07075E6339A6E6C4C906 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "xamine agent";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AGENT_BUNDLE_PREFIX)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8FFB1EA0DF299F3947862C9D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AGENT_BUNDLE_PREFIX = com.xamine.agent;
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D7A40BD533E214856FFA416E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AGENT_BUNDLE_PREFIX = com.xamine.agent;
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		05881BD7A739F7DA898DC6B8 /* Build configuration list for PBXProject "XamineAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FFB1EA0DF299F3947862C9D /* Debug */,
+				D7A40BD533E214856FFA416E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		14A1C8508FF9786E4EA730EB /* Build configuration list for PBXNativeTarget "XamineAgentUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				312AA121CD2F1098F194F0F7 /* Debug */,
+				226318AD63CA2EAC1581FC55 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1B08B6BF981F34DEA3E38596 /* Build configuration list for PBXNativeTarget "XamineAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				02138A38850539B8BD8E04E6 /* Debug */,
+				3C1E07075E6339A6E6C4C906 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8F9113C0A38BD13A586313DE /* Project object */;
+}

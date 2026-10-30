@@ -39,7 +39,9 @@ private struct MenuContent: View {
             .keyboardShortcut("x", modifiers: [.command, .shift, .option])
         Button("Inspect Under Cursor in 5 Seconds") { state.startHandsOff(delay: 5) }
 
-        if state.inspector.target != nil {
+        Button("Inspect iOS Device…") { state.showDevices() }
+
+        if state.inspector.summary != nil {
             Button("Show Inspector") { state.showInspector() }
         }
 

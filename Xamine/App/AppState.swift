@@ -8,12 +8,14 @@ final class AppState {
 
     let permissions = PermissionsManager()
     let inspector = InspectorModel()
+    let devices = DeviceManager()
     private(set) var recents: [PickedWindow] = []
 
     @ObservationIgnored private let picker = WindowPickerController()
     @ObservationIgnored private var hotKeys: [HotKey] = []
     @ObservationIgnored private var inspectorWindow: NSWindow?
     @ObservationIgnored private var onboardingWindow: NSWindow?
+    @ObservationIgnored private var devicesWindow: NSWindow?
     @ObservationIgnored private var windowCloseObserver: NSObjectProtocol?
 
     func didLaunch() {
@@ -83,6 +85,31 @@ final class AppState {
         present(window)
     }
 
+    func showDevices() {
+        let window = devicesWindow ?? makeWindow(
+            title: "iOS Devices",
+            size: NSSize(width: 560, height: 640),
+            content: DeviceWindow(manager: devices) { [weak self] bundleID in self?.inspectDevice(bundleID: bundleID) }
+        )
+        devicesWindow = window
+        present(window)
+    }
+
+    /// Opens the inspector on an app running on the device whose agent is up.
+    func inspectDevice(bundleID: String?) {
+        guard let client = devices.client, let device = devices.selectedDevice else { return }
+        let inspection = DeviceInspection(
+            client: client,
+            deviceName: device.name,
+            bundleID: bundleID,
+            candidates: devices.foregroundCandidates,
+            appNames: Dictionary(devices.apps.map { ($0.bundleID, $0.name) }, uniquingKeysWith: { first, _ in first })
+                .merging(["com.apple.springboard": "Home Screen"]) { current, _ in current }
+        )
+        showInspector()
+        Task { await inspector.loadDevice(inspection) }
+    }
+
     func showOnboarding() {
         let window = onboardingWindow ?? makeWindow(
             title: "Welcome to xamine",
@@ -128,7 +155,7 @@ final class AppState {
     }
 
     private func windowWillClose(_ closing: NSWindow?) {
-        let others = [inspectorWindow, onboardingWindow].compactMap { $0 }.filter { $0 !== closing && $0.isVisible }
+        let others = [inspectorWindow, onboardingWindow, devicesWindow].compactMap { $0 }.filter { $0 !== closing && $0.isVisible }
         if others.isEmpty { NSApp.setActivationPolicy(.accessory) }
     }
 }

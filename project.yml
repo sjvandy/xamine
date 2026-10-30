@@ -16,6 +16,10 @@ targets:
     platform: macOS
     sources:
       - Xamine
+      # The on-device agent's project, copied into the app and built for the user's device at runtime.
+      - path: Agent
+        type: folder
+        buildPhase: resources
     info:
       path: Xamine/Resources/Info.plist
       properties:

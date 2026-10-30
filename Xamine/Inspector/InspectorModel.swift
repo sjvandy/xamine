@@ -9,7 +9,11 @@ final class InspectorModel {
         let depth: Int
     }
 
+    /// What's being inspected: a Mac window (`target`) or an app on an iOS device (`device`).
     private(set) var target: PickedWindow?
+    private(set) var device: DeviceInspection?
+    /// The app currently shown from the device (resolved when following the foreground app).
+    private(set) var deviceBundleID: String?
     private(set) var image: CGImage?
     private(set) var tree: UITree?
     private(set) var isLoading = false
@@ -46,6 +50,17 @@ final class InspectorModel {
 
     func load(_ target: PickedWindow) async {
         self.target = target
+        device = nil
+        selectedID = nil
+        hoveredID = nil
+        searchText = ""
+        await rescan(resetExpansion: true)
+    }
+
+    func loadDevice(_ device: DeviceInspection) async {
+        self.device = device
+        target = nil
+        deviceBundleID = nil
         selectedID = nil
         hoveredID = nil
         searchText = ""
@@ -53,6 +68,10 @@ final class InspectorModel {
     }
 
     func rescan(resetExpansion: Bool = false) async {
+        if let device {
+            await rescanDevice(device, resetExpansion: resetExpansion)
+            return
+        }
         guard var target else { return }
         isLoading = true
         errorMessage = nil
@@ -98,6 +117,61 @@ final class InspectorModel {
             self.tree = nil
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func rescanDevice(_ device: DeviceInspection, resetExpansion: Bool) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let bundleID: String
+            if let chosen = device.bundleID {
+                bundleID = chosen
+            } else {
+                bundleID = try await device.client.foregroundApp(candidates: device.candidates)
+            }
+            async let screenshot = try? device.client.screenshot()
+            let root = try await device.client.tree(bundleID: bundleID)
+            let tree = root.makeTree(appName: device.appNames[bundleID] ?? bundleID, bundleID: bundleID)
+            let switchedApps = bundleID != deviceBundleID
+            if let image = await screenshot { self.image = image }
+            self.tree = tree
+            deviceBundleID = bundleID
+            if resetExpansion || switchedApps || expandedIDs.isEmpty {
+                expandedIDs = Set(tree.nodes.filter { $0.depth < 6 && !$0.childIDs.isEmpty }.map(\.id))
+            }
+            if switchedApps { selectedID = nil }
+            if let selectedID, selectedID >= tree.nodes.count { self.selectedID = nil }
+        } catch {
+            Log.scan.error("device scan failed: \(error.localizedDescription, privacy: .public)")
+            if !resetExpansion, tree != nil {
+                showToast("Couldn't reach the agent — is it still running?", symbol: "exclamationmark.triangle.fill")
+                return
+            }
+            tree = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Name, bundle ID and icon for the title chip.
+    struct Summary {
+        let name: String
+        let bundleID: String?
+        let icon: NSImage?
+        let detail: String?
+    }
+
+    var summary: Summary? {
+        if let device {
+            return Summary(name: tree?.appName ?? device.deviceName, bundleID: deviceBundleID,
+                           icon: NSImage(systemSymbolName: "iphone", accessibilityDescription: nil), detail: device.deviceName)
+        }
+        if let target {
+            return Summary(name: target.appName, bundleID: target.bundleID,
+                           icon: NSRunningApplication(processIdentifier: target.pid)?.icon,
+                           detail: Optional([target.title.nonEmpty, target.isSimulator ? "iOS Simulator" : nil].compactMap { $0 }.joined(separator: " · ")).nonEmpty)
+        }
+        return nil
     }
 
     private static func currentBounds(of windowID: CGWindowID) -> CGRect? {

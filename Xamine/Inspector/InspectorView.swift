@@ -48,23 +48,22 @@ struct InspectorView: View {
     }
 
     @ViewBuilder private var targetLabel: some View {
-        if let target = model.target {
+        if let summary = model.summary {
             Button {
-                model.copy(target.bundleID ?? target.appName, message: "Copied bundle ID")
+                model.copy(summary.bundleID ?? summary.name, message: "Copied bundle ID")
             } label: {
                 HStack(spacing: 8) {
-                    if let icon = NSRunningApplication(processIdentifier: target.pid)?.icon {
-                        Image(nsImage: icon).resizable().frame(width: 20, height: 20)
+                    if let icon = summary.icon {
+                        Image(nsImage: icon).resizable().scaledToFit().frame(width: 20, height: 20)
                     }
-                    Text(target.appName).fontWeight(.semibold)
-                        + Text(target.bundleID.map { " - \($0)" } ?? "").foregroundStyle(.secondary)
+                    Text(summary.name).fontWeight(.semibold)
+                        + Text(summary.bundleID.map { " - \($0)" } ?? "").foregroundStyle(.secondary)
                     if model.isLoading { ProgressView().controlSize(.small) }
                 }
                 .lineLimit(1)
                 .padding(.horizontal, 4)
             }
-            .help([target.title.nonEmpty, target.isSimulator ? "iOS Simulator" : nil, "Click to copy the bundle ID"]
-                .compactMap { $0 }.joined(separator: " · "))
+            .help([summary.detail, "Click to copy the bundle ID"].compactMap { $0 }.joined(separator: " · "))
         }
     }
 }

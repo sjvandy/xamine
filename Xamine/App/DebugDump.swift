@@ -15,6 +15,31 @@ enum DebugDump {
             ? CGPoint(x: Double(args[index + 2]) ?? 0, y: Double(args[index + 3]) ?? 0) : nil
         let outputURL = atPoint == nil ? output : URL(fileURLWithPath: args[index + 4])
 
+        // `--dump device <bundle id> <path>` reads that app through an agent running on a simulator.
+        if bundleID == "device", args.count > index + 3 {
+            let app = args[index + 2]
+            let path = URL(fileURLWithPath: args[index + 3])
+            Task {
+                var text = ""
+                do {
+                    let client = AgentClient(host: "127.0.0.1")
+                    let tree = try await client.tree(bundleID: app).makeTree(appName: app, bundleID: app)
+                    let image = try await client.screenshot()
+                    let builder = QueryBuilder(tree: tree, includeAppDeclaration: false)
+                    text += "nodes: \(tree.nodes.count) screen: \(tree.windowFrame) screenshot: \(image.width)x\(image.height)\n"
+                    for node in tree.nodes where node.hasSelector {
+                        let queries = builder.queries(for: node.id)
+                        text += "\(node.kind.displayName) \(node.bestKey ?? "")\n  \(queries.byIdentifier?.code ?? "-")\n  \(queries.fromContainer.code.replacingOccurrences(of: "\n", with: " "))\n"
+                    }
+                } catch {
+                    text = "error: \(error.localizedDescription)\n"
+                }
+                try? text.write(to: path, atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+            }
+            return true
+        }
+
         Task {
             var text = ""
             let target = atPoint.map {
