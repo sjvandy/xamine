@@ -10,12 +10,19 @@ enum CaptureError: LocalizedError {
 
 /// Captures what was picked: a single app window on its own, or the screen region under system UI.
 enum WindowCapture {
-    static func capture(_ target: PickedWindow) async throws -> CGImage {
+    struct Result: Sendable {
+        let image: CGImage
+        /// The area actually captured, in global coordinates. System UI can extend past the screen edge
+        /// (Control Center's window does), so this can be smaller than what was asked for.
+        let frame: CGRect
+    }
+
+    static func capture(_ target: PickedWindow) async throws -> Result {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             if target.isAppWindow, let window = content.windows.first(where: { $0.windowID == target.windowID }) {
                 Log.capture.notice("capturing window \(target.windowID)")
-                return try await capture(window: window)
+                return Result(image: try await capture(window: window), frame: target.bounds)
             }
             Log.capture.notice("capturing region \(String(describing: target.bounds), privacy: .public) desktopOnly=\(target.isDesktop)")
             return try await capture(region: target.bounds, desktopOnly: target.isDesktop, from: content)
@@ -41,7 +48,7 @@ enum WindowCapture {
     /// A region of the display, as it appears on screen minus xamine's own windows. System UI such as
     /// Control Center is often several windows composited together, so a region captures it as seen.
     /// For the desktop, only desktop-level windows (wallpaper, icons, widgets) are included.
-    private static func capture(region: CGRect, desktopOnly: Bool, from content: SCShareableContent) async throws -> CGImage {
+    private static func capture(region: CGRect, desktopOnly: Bool, from content: SCShareableContent) async throws -> Result {
         guard let display = content.displays.first(where: { $0.frame.contains(CGPoint(x: region.midX, y: region.midY)) })
             ?? content.displays.first else { throw CaptureError.windowNotShareable }
 
@@ -57,11 +64,13 @@ enum WindowCapture {
 
         let config = SCStreamConfiguration()
         let scale = CGFloat(filter.pointPixelScale)
-        let local = region.intersection(display.frame).offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+        let visible = region.intersection(display.frame)
+        let local = visible.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
         config.sourceRect = local
         config.width = Int(local.width * scale)
         config.height = Int(local.height * scale)
         config.showsCursor = false
-        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        return Result(image: image, frame: visible)
     }
 }

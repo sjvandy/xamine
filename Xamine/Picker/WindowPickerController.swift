@@ -3,7 +3,7 @@ import AppKit
 /// A ⌘⇧5-style picker: covers every screen, highlights the window under the cursor, and reports the one picked.
 ///
 /// Two modes:
-/// - **Click** (`start`): xamine takes focus and the user clicks a window. Works for app windows, the Dock, the menu bar and the desktop.
+/// - **Click** (`start`): xamine takes focus and the user clicks an app window.
 /// - **Hands-off** (`startHandsOff`): the overlay never takes focus or mouse events, so transient system UI like Spotlight,
 ///   Control Center or an open menu stays open. Whatever is under the cursor is picked when the countdown ends
 ///   (or immediately with no countdown).
@@ -99,7 +99,9 @@ final class WindowPickerController {
         hidden = NSApp.windows.filter { $0.isVisible && !($0 is PickerPanel) && $0.level == .normal }
         hidden.forEach { $0.orderOut(nil) }
 
-        candidates = Self.onScreenWindows()
+        // Clicking dismisses menus, Spotlight and Control Center, so click mode only offers app windows;
+        // hands-off mode offers everything, including the menu bar, Dock and desktop.
+        candidates = Self.onScreenWindows().filter { handsOff || $0.window.layer == 0 }
         Self.logCandidates(candidates)
         panels = NSScreen.screens.map { screen in
             let panel = PickerPanel(screen: screen, controller: self, passive: handsOff)
@@ -112,7 +114,7 @@ final class WindowPickerController {
         let point = Self.cgPoint(fromCocoa: NSEvent.mouseLocation)
         let next = candidates.lazy.compactMap { $0.hit(point) }.first.map { candidate in
             Candidate(window: candidate.window.anchored(at: point), icon: candidate.icon)
-        } ?? Self.desktopCandidate(at: point)
+        } ?? (isHandsOff ? Self.desktopCandidate(at: point) : nil)
         let changed = next?.window.windowID != hovered?.window.windowID || (next == nil) != (hovered == nil)
         hovered = next
         if changed { redraw() }

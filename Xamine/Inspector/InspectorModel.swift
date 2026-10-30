@@ -67,9 +67,14 @@ final class InspectorModel {
         let picked = target
         async let capture = try? WindowCapture.capture(picked)
         do {
-            let tree = try await HierarchyScanner.scan(picked)
-            let image = await capture
-            if let image { self.image = image }
+            var tree = try await HierarchyScanner.scan(picked)
+            if let capture = await capture {
+                self.image = capture.image
+                // Map element frames onto the area really captured, so the screenshot isn't stretched.
+                tree.windowFrame = capture.frame
+            } else if let previous = self.tree {
+                tree.windowFrame = previous.windowFrame
+            }
             self.tree = tree
             // System UI picked by position may belong to another process than the window under it.
             target.pid = tree.pid
@@ -82,14 +87,14 @@ final class InspectorModel {
             if let selectedID, selectedID >= tree.nodes.count { self.selectedID = nil }
         } catch {
             Log.scan.error("scan failed: \(error.localizedDescription, privacy: .public)")
-            let image = await capture
+            let capture = await capture
             if !resetExpansion, tree != nil {
                 // Transient UI (menus, Spotlight, Control Center) is usually gone by the time of a re-scan;
                 // keep what was captured rather than wiping it.
                 showToast("Couldn't re-scan — it may have closed", symbol: "exclamationmark.triangle.fill")
                 return
             }
-            self.image = image
+            self.image = capture?.image
             self.tree = nil
             errorMessage = error.localizedDescription
         }
