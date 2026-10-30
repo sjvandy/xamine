@@ -3,6 +3,7 @@ import SwiftUI
 /// The captured window, with hover and selection highlights. Clicking an element selects it and copies its query.
 struct ScreenshotCanvas: View {
     @Bindable var model: InspectorModel
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         GeometryReader { proxy in
@@ -34,13 +35,27 @@ struct ScreenshotCanvas: View {
                 .onContinuousHover { phase in
                     switch phase {
                     case .active(let location):
-                        model.hoveredID = node(at: location, tree, scale)
+                        isFocused = true
+                        model.hoverScreenshot(at: globalPoint(location, tree, scale))
                     case .ended:
-                        model.hoveredID = nil
+                        model.hoverScreenshot(at: nil)
                     }
                 }
                 .onTapGesture { location in
-                    if let id = node(at: location, tree, scale) { model.pickFromScreenshot(id) }
+                    // Click picks the layer chosen with ↑/↓, or the deepest element under the cursor.
+                    model.hoverScreenshot(at: globalPoint(location, tree, scale))
+                    if let id = model.hoveredID { model.pickFromScreenshot(id) }
+                }
+                .focusable()
+                .focusEffectDisabled()
+                .focused($isFocused)
+                .onKeyPress(keys: [.upArrow, "["]) { _ in
+                    model.moveHoverLayer(-1)
+                    return .handled
+                }
+                .onKeyPress(keys: [.downArrow, "]"]) { _ in
+                    model.moveHoverLayer(1)
+                    return .handled
                 }
                 .help("Click an element to select it and copy its query")
                 .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
@@ -56,9 +71,8 @@ struct ScreenshotCanvas: View {
         .overlay(alignment: .bottomLeading) { hoverBadge }
     }
 
-    private func node(at location: CGPoint, _ tree: UITree, _ scale: CGFloat) -> Int? {
-        let global = CGPoint(x: tree.windowFrame.minX + location.x / scale, y: tree.windowFrame.minY + location.y / scale)
-        return tree.hitTest(global)?.id
+    private func globalPoint(_ location: CGPoint, _ tree: UITree, _ scale: CGFloat) -> CGPoint {
+        CGPoint(x: tree.windowFrame.minX + location.x / scale, y: tree.windowFrame.minY + location.y / scale)
     }
 
     private func draw(_ tree: UITree, _ id: Int, _ scale: CGFloat, in context: inout GraphicsContext,
@@ -86,6 +100,12 @@ struct ScreenshotCanvas: View {
                 }
                 if let identifier = node.identifier.nonEmpty {
                     Text(identifier).font(.caption.monospaced()).foregroundStyle(.secondary)
+                }
+                if let layer = model.hoverLayerPosition {
+                    Divider().frame(height: 12)
+                    Text("Layer \(layer.index) of \(layer.count)")
+                        .foregroundStyle(.secondary)
+                    Text("↑↓").font(.caption.monospaced()).foregroundStyle(.tertiary)
                 }
             }
             .font(.callout)

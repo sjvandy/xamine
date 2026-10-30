@@ -32,20 +32,52 @@ enum HierarchyScanner {
     static let maxNodes = 15_000
 
     static func scan(_ target: PickedWindow) async throws -> UITree {
+        var nodes = try await pass(target, enhanced: false)
+
+        // Web views (WebKit, Chromium, Electron) build their accessibility tree lazily, the first time an
+        // assistive app asks. The first pass then sees large empty placeholder groups, so re-read a few times.
+        var retries = 0
+        while retries < 4, hasUnpopulatedContainers(nodes) {
+            retries += 1
+            try await Task.sleep(for: .milliseconds(350))
+            let previousCount = nodes.count
+            nodes = try await pass(target, enhanced: true)
+            if retries > 1, nodes.count == previousCount { break }
+        }
+        return makeTree(nodes, for: target)
+    }
+
+    /// One walk of the window, off the main actor.
+    private static func pass(_ target: PickedWindow, enhanced: Bool) async throws -> [UINode] {
         try await Task.detached(priority: .userInitiated) {
-            try scanSync(target)
+            guard AXIsProcessTrusted() else { throw ScanError.notTrusted }
+            let app = AXElement.application(pid: target.pid)
+            // Chromium and Electron only expose web content once this is set; WebKit ignores it.
+            app.set("AXManualAccessibility", true)
+            // Asks apps (and WebKit) to build their full tree, as VoiceOver does. Some apps change behavior
+            // while it is on (e.g. window animations), so it is restored after the walk.
+            let previousEnhanced = enhanced ? app.attribute("AXEnhancedUserInterface") as? Bool : nil
+            if enhanced { app.set("AXEnhancedUserInterface", true) }
+            defer { if enhanced { app.set("AXEnhancedUserInterface", previousEnhanced ?? false) } }
+
+            guard let window = findWindow(in: app, matching: target) else { throw ScanError.windowNotFound }
+            var nodes: [UINode] = []
+            nodes.reserveCapacity(1024)
+            visit(window, parentID: nil, depth: 0, into: &nodes)
+            return nodes
         }.value
     }
 
-    private static func scanSync(_ target: PickedWindow) throws -> UITree {
-        guard AXIsProcessTrusted() else { throw ScanError.notTrusted }
-        let app = AXElement.application(pid: target.pid)
-        guard let window = findWindow(in: app, matching: target) else { throw ScanError.windowNotFound }
+    /// Whether the tree has big containers with no children — the signature of web content not yet loaded.
+    private static func hasUnpopulatedContainers(_ nodes: [UINode]) -> Bool {
+        nodes.contains { node in
+            guard node.depth > 0, node.childIDs.isEmpty, let frame = node.frame,
+                  frame.width >= 150, frame.height >= 150 else { return false }
+            return ["AXWebArea", "AXGroup", "AXScrollArea"].contains(node.role)
+        }
+    }
 
-        var nodes: [UINode] = []
-        nodes.reserveCapacity(1024)
-        visit(window, parentID: nil, depth: 0, into: &nodes)
-
+    private static func makeTree(_ nodes: [UINode], for target: PickedWindow) -> UITree {
         var tree = UITree(
             nodes: nodes,
             appName: target.appName,

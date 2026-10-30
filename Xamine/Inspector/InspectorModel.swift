@@ -23,6 +23,8 @@ final class InspectorModel {
         }
     }
     var hoveredID: Int?
+    /// Layers under the cursor on the screenshot, outermost first; `hoveredID` is one of them.
+    private(set) var hoverStack: [Int] = []
     var expandedIDs: Set<Int> = []
     var searchText = ""
 
@@ -144,6 +146,33 @@ final class InspectorModel {
     var selectedQueries: GeneratedQueries? {
         guard let selectedID, let builder, selectedID < builder.tree.nodes.count else { return nil }
         return builder.queries(for: selectedID)
+    }
+
+    // MARK: - Screenshot hover
+
+    /// Updates the layers under the cursor. Keeps the chosen layer while the cursor stays over the same stack.
+    func hoverScreenshot(at point: CGPoint?) {
+        guard let point, let tree else {
+            hoverStack = []
+            hoveredID = nil
+            return
+        }
+        let stack = tree.hitStack(point)
+        if stack == hoverStack, let hoveredID, stack.contains(hoveredID) { return }
+        hoverStack = stack
+        hoveredID = stack.last
+    }
+
+    /// Moves the hover one layer out (`-1`, toward the window) or in (`+1`, toward the deepest element).
+    func moveHoverLayer(_ delta: Int) {
+        guard let hoveredID, let index = hoverStack.firstIndex(of: hoveredID) else { return }
+        let next = min(max(index + delta, 0), hoverStack.count - 1)
+        self.hoveredID = hoverStack[next]
+    }
+
+    var hoverLayerPosition: (index: Int, count: Int)? {
+        guard let hoveredID, let index = hoverStack.firstIndex(of: hoveredID), hoverStack.count > 1 else { return nil }
+        return (hoverStack.count - index, hoverStack.count)
     }
 
     /// Selects the element under a screenshot click and copies its best query.

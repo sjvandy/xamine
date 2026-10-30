@@ -16,6 +16,9 @@ struct XamineApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if DebugDump.runIfRequested() { return }
+        #endif
         AppState.shared.didLaunch()
     }
 

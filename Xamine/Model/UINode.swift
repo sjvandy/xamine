@@ -80,6 +80,14 @@ struct UITree: Sendable {
         return false
     }
 
+    /// Every layer under `point`, outermost first: the deepest hit plus each ancestor whose frame also contains the point.
+    func hitStack(_ point: CGPoint) -> [Int] {
+        guard let hit = hitTest(point) else { return [] }
+        return (ancestors(of: hit.id) + [hit])
+            .filter { $0.frame?.contains(point) == true }
+            .map(\.id)
+    }
+
     /// The deepest node whose frame contains `point` (global coordinates), preferring the smallest area on ties.
     func hitTest(_ point: CGPoint) -> UINode? {
         var best: UINode?

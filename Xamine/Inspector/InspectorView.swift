@@ -49,21 +49,22 @@ struct InspectorView: View {
 
     @ViewBuilder private var targetLabel: some View {
         if let target = model.target {
-            HStack(spacing: 8) {
-                if let icon = NSRunningApplication(processIdentifier: target.pid)?.icon {
-                    Image(nsImage: icon).resizable().frame(width: 22, height: 22)
+            Button {
+                model.copy(target.bundleID ?? target.appName, message: "Copied bundle ID")
+            } label: {
+                HStack(spacing: 8) {
+                    if let icon = NSRunningApplication(processIdentifier: target.pid)?.icon {
+                        Image(nsImage: icon).resizable().frame(width: 20, height: 20)
+                    }
+                    Text(target.appName).fontWeight(.semibold)
+                        + Text(target.bundleID.map { " - \($0)" } ?? "").foregroundStyle(.secondary)
+                    if model.isLoading { ProgressView().controlSize(.small) }
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(target.appName).font(.headline)
-                    Text(subtitle(for: target)).font(.caption).foregroundStyle(.secondary)
-                }
-                if model.isLoading { ProgressView().controlSize(.small) }
+                .lineLimit(1)
+                .padding(.horizontal, 4)
             }
+            .help([target.title.nonEmpty, target.isSimulator ? "iOS Simulator" : nil, "Click to copy the bundle ID"]
+                .compactMap { $0 }.joined(separator: " · "))
         }
-    }
-
-    private func subtitle(for target: PickedWindow) -> String {
-        let platform = target.isSimulator ? "iOS Simulator" : (target.bundleID ?? "")
-        return [target.title.nonEmpty, platform].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
     }
 }

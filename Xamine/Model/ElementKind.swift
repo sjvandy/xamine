@@ -185,6 +185,8 @@ struct ElementKind: Hashable, Sendable {
         "AXHandle": named("handle"),
         "AXDateField": named("datePicker"),
         "AXSegmentedControl": named("segmentedControl"),
+        // Web headings have no dedicated XCUITest type.
+        "AXHeading": ElementKind(typeName: "other", queryName: "otherElements", displayName: "Heading", symbol: "textformat.size", category: .text),
     ]
 
     private static let bySubrole: [String: ElementKind] = [

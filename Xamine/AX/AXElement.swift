@@ -47,6 +47,10 @@ struct AXElement {
         return value
     }
 
+    func set(_ name: String, _ value: Bool) {
+        AXUIElementSetAttributeValue(raw, name as CFString, (value ? kCFBooleanTrue : kCFBooleanFalse) as CFTypeRef)
+    }
+
     var children: [AXElement] {
         (attribute(kAXChildrenAttribute) as? [AXUIElement])?.map(AXElement.init) ?? []
     }
