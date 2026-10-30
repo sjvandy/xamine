@@ -12,6 +12,18 @@ final class WindowPickerController {
     struct Candidate {
         let window: PickedWindow
         let icon: NSImage?
+        /// For a system window that covers the whole screen (like the Dock's), the frames of its visible pieces.
+        /// Only points inside these count as hits; `nil` means the whole window bounds.
+        var hitFrames: [CGRect]?
+
+        /// This candidate narrowed to whatever it shows at `point`, or `nil` if the point misses it.
+        func hit(_ point: CGPoint) -> Candidate? {
+            guard let hitFrames else { return window.bounds.contains(point) ? self : nil }
+            guard let frame = hitFrames.first(where: { $0.contains(point) }) else { return nil }
+            var window = window
+            window.bounds = frame
+            return Candidate(window: window, icon: icon)
+        }
     }
 
     private var panels: [PickerPanel] = []
@@ -95,7 +107,7 @@ final class WindowPickerController {
 
     func updateHover() {
         let point = Self.cgPoint(fromCocoa: NSEvent.mouseLocation)
-        let next = candidates.first { $0.window.bounds.contains(point) }.map { candidate in
+        let next = candidates.lazy.compactMap { $0.hit(point) }.first.map { candidate in
             Candidate(window: candidate.window.anchored(at: point), icon: candidate.icon)
         } ?? Self.desktopCandidate(at: point)
         let changed = next?.window.windowID != hovered?.window.windowID || (next == nil) != (hovered == nil)
@@ -136,6 +148,8 @@ final class WindowPickerController {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
         else { return [] }
         let ownPID = ProcessInfo.processInfo.processIdentifier
+        let screens = NSScreen.screens.map { cgRect(fromCocoa: $0.frame) }
+        var pieceCache: [pid_t: [CGRect]] = [:]
 
         return list.compactMap { info in
             guard let layer = info[kCGWindowLayer as String] as? Int, layer >= 0,
@@ -152,6 +166,16 @@ final class WindowPickerController {
             // The only Window Server window worth picking is the menu bar; the real owner is resolved when scanning.
             if owner == "Window Server", name != "Menubar" { return nil }
 
+            // System UI such as the Dock keeps a transparent window over the whole screen above every app window.
+            // Only its visible pieces (the Dock's icon bar) should count, so ask accessibility where they are.
+            var hitFrames: [CGRect]?
+            if layer > 0, screens.contains(where: { $0.intersection(bounds).width * $0.intersection(bounds).height >= $0.width * $0.height * 0.8 }) {
+                let pieces = pieceCache[pid] ?? topLevelFrames(of: pid)
+                pieceCache[pid] = pieces
+                hitFrames = pieces.filter { $0.intersects(bounds) && !screens.contains($0) }
+                if hitFrames?.isEmpty != false { return nil }
+            }
+
             let app = NSRunningApplication(processIdentifier: pid)
             let window = PickedWindow(
                 pid: pid,
@@ -162,8 +186,15 @@ final class WindowPickerController {
                 title: name,
                 layer: layer
             )
-            return Candidate(window: window, icon: owner == "Window Server" ? NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: nil) : app?.icon)
+            return Candidate(window: window,
+                             icon: owner == "Window Server" ? NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: nil) : app?.icon,
+                             hitFrames: hitFrames)
         }
+    }
+
+    /// Frames of an app's top-level accessibility elements (windows, the Dock's list, …).
+    private static func topLevelFrames(of pid: pid_t) -> [CGRect] {
+        AXElement.application(pid: pid).children.compactMap(\.frame).filter { $0.width > 4 && $0.height > 4 }
     }
 
     /// When nothing is above the cursor, pick the desktop (Finder's icons and widgets) on that screen.
