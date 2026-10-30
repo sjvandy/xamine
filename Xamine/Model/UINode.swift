@@ -23,9 +23,33 @@ struct UINode: Identifiable, Hashable, Sendable {
     var frame: CGRect?
     var isEnabled: Bool?
 
-    /// The string XCUITest's subscript matches against first: identifier, then title, then label.
+    /// The most stable string to look this element up by with XCUITest's subscript or `matching(identifier:)`:
+    /// identifier, then title, label, value and placeholder. Long, multi-line or numeric values are skipped, since
+    /// they're content or state rather than something to find an element by.
     var bestKey: String? {
-        identifier.nonEmpty ?? title.nonEmpty ?? label.nonEmpty
+        identifier.nonEmpty ?? title.nonEmpty ?? label.nonEmpty ?? keyableValue ?? placeholder.nonEmpty
+    }
+
+    /// Which identifying property `bestKey` came from, for notes in the UI.
+    var bestKeySource: String? {
+        if identifier.nonEmpty != nil { return "identifier" }
+        if title.nonEmpty != nil { return "title" }
+        if label.nonEmpty != nil { return "label" }
+        if keyableValue != nil { return "value" }
+        if placeholder.nonEmpty != nil { return "placeholder" }
+        return nil
+    }
+
+    private var keyableValue: String? {
+        guard let value = value.nonEmpty, value.count <= 100, !value.contains(where: \.isNewline), Double(value) == nil else { return nil }
+        return value
+    }
+
+    /// Whether `key` equals any of the properties XCUITest's identifier matching compares against
+    /// (`identifier`, `title`, `label`, `value`, `placeholderValue`), as used by the subscript,
+    /// `matching(identifier:)` and `containing(_:identifier:)`.
+    func matchesIdentifier(_ key: String) -> Bool {
+        identifier == key || title == key || label == key || value == key || placeholder == key
     }
 
     /// The most descriptive text for display: title, label, value, or placeholder.

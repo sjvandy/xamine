@@ -9,7 +9,7 @@ struct HierarchyOutline: View {
             // Context menus can be rendered off the main thread, so they get value copies, not the model.
             let builder = model.builder
             ScrollViewReader { proxy in
-                List(model.visibleRows, selection: $model.selectedID) { row in
+                List(model.visibleRows, selection: Binding(get: { model.selectedID }, set: { id in if id != model.selectedID { model.select(id) } })) { row in
                     HierarchyRow(
                         node: tree.node(row.id),
                         isExpanded: model.expandedIDs.contains(row.id) || !model.searchText.isEmpty,

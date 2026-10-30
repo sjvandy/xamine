@@ -44,7 +44,7 @@ struct ScreenshotCanvas: View {
                 .onTapGesture { location in
                     // Click picks the layer chosen with ↑/↓, or the deepest element under the cursor.
                     model.hoverScreenshot(at: globalPoint(location, tree, scale))
-                    if let id = model.hoveredID { model.pickFromScreenshot(id) }
+                    if let id = model.hoveredID { model.select(id) }
                 }
                 .focusable()
                 .focusEffectDisabled()

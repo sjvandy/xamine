@@ -22,10 +22,12 @@ struct Snippet: Equatable, Sendable {
 }
 
 struct GeneratedQueries: Equatable, Sendable {
-    /// `nil` when the element has no identifier, label, or other matchable text.
+    /// `nil` when the element has no identifier, title, label, value or placeholder to match.
     var byIdentifier: Snippet?
     /// Starts at the closest container whose element type occurs once in the window.
     var fromContainer: Snippet
+    /// False when no container type is unique and `fromContainer` is just the full path.
+    var hasUniqueContainer: Bool
     /// Starts at the closest container that has, or directly holds, a uniquely identified element.
     var fromAnchor: Snippet?
     /// The full path from the window.
@@ -41,11 +43,15 @@ struct QueryBuilder {
     var includeAppDeclaration: Bool = true
 
     func queries(for id: Int) -> GeneratedQueries {
-        GeneratedQueries(
+        let container = containerSnippet(for: id)
+        let hierarchy = hierarchySnippet(for: id)
+        return GeneratedQueries(
             byIdentifier: identifierSnippet(for: tree.node(id)),
-            fromContainer: containerSnippet(for: id),
+            fromContainer: container,
+            // The container query falls back to exactly the full path when nothing is unique.
+            hasUniqueContainer: container.code != hierarchy.code,
             fromAnchor: anchoredSnippet(for: id),
-            byHierarchy: hierarchySnippet(for: id),
+            byHierarchy: hierarchy,
             breadcrumb: breadcrumb(for: id)
         )
     }
@@ -64,41 +70,23 @@ struct QueryBuilder {
     func identifierSnippet(for node: UINode) -> Snippet? {
         let query = "app.\(node.kind.queryName)"
 
-        if let key = node.bestKey {
-            let matches = keyMatches(kind: node.kind, key: key)
-            var note: String?
-            if node.identifier.nonEmpty == nil {
-                note = "No accessibility identifier — matched by \(node.title.nonEmpty != nil ? "title" : "label")."
-            }
-            let expression: String
-            if matches.count <= 1 {
-                expression = "\(query)[\(Self.literal(key))]"
-            } else {
-                let index = matches.firstIndex(of: node.id) ?? 0
-                expression = "\(query).matching(identifier: \(Self.literal(key))).element(boundBy: \(index))"
-                note = [note, "\(matches.count) \(node.kind.displayName.lowercased())s share this key; using match \(index + 1)."]
-                    .compactMap { $0 }.joined(separator: " ")
-            }
-            return Snippet(code: wrap(expression), note: note)
+        guard let key = node.bestKey, let source = node.bestKeySource else { return nil }
+        let matches = keyMatches(kind: node.kind, key: key)
+        var note: String?
+        if source != "identifier" {
+            note = "No accessibility identifier — matched by \(source)."
         }
-
-        for (attribute, text) in [("value", node.value), ("placeholderValue", node.placeholder)] {
-            guard let text = text.nonEmpty else { continue }
-            let matches = matchingNodes(kind: node.kind) { attribute == "value" ? $0.value == text : $0.placeholder == text }
+        let expression: String
+        if matches.count <= 1 {
+            expression = "\(query)[\(Self.literal(key))]"
+        } else {
+            // The subscript returns a single element, so duplicates need a query to index into.
             let index = matches.firstIndex(of: node.id) ?? 0
-            let predicate = "NSPredicate(format: \(Self.literal("\(attribute) == %@")), \(Self.literal(text)))"
-            let tail = matches.count <= 1 ? ".firstMatch" : ".element(boundBy: \(index))"
-            return Snippet(
-                code: wrap("\(query).matching(\(predicate))\(tail)"),
-                note: "No identifier or label — matched by \(attribute)."
-            )
+            expression = "\(query).matching(identifier: \(Self.literal(key))).element(boundBy: \(index))"
+            note = [note, "\(matches.count) \(node.kind.displayName.lowercased())s share this key; using match \(index + 1)."]
+                .compactMap { $0 }.joined(separator: " ")
         }
-        return nil
-    }
-
-    /// Nodes of `kind` (in document order, below the query root) that satisfy `predicate`.
-    private func matchingNodes(kind: ElementKind, where predicate: (UINode) -> Bool) -> [Int] {
-        tree.nodes.filter { tree.isInQueryScope($0.id) && $0.kind.typeName == kind.typeName && predicate($0) }.map(\.id)
+        return Snippet(code: wrap(expression), note: note)
     }
 
     // MARK: - By hierarchy
@@ -133,16 +121,14 @@ struct QueryBuilder {
             if position >= 0, let key = container.bestKey,
                keyMatches(kind: container.kind, key: key).count == 1 {
                 let start = "app.\(container.kind.queryName)[\(Self.literal(key))]"
-                let source = container.identifier.nonEmpty != nil ? "identifier" : "label"
+                let source = container.bestKeySource ?? "label"
                 return Snippet(code: wrap(expression(from: start, steps: steps)),
                                note: "Anchored to the \(container.kind.displayName.lowercased()) with \(source) “\(key)”.")
             }
 
             let onPath = steps.first?.id
             for sibling in tree.children(of: container.id) where sibling.id != onPath {
-                guard let key = sibling.identifier.nonEmpty,
-                      nodesInScope(where: { $0.kind.typeName == sibling.kind.typeName && $0.identifier == key }).count == 1
-                else { continue }
+                guard let key = sibling.identifier.nonEmpty, keyMatches(kind: sibling.kind, key: key).count == 1 else { continue }
                 // Every container of this type that holds that element somewhere below it, in document order.
                 let holders = nodesInScope { $0.kind.typeName == container.kind.typeName && contains($0.id, kind: sibling.kind, identifier: key) }
                 let index = holders.firstIndex(of: container.id) ?? 0
@@ -167,17 +153,17 @@ struct QueryBuilder {
         tree.nodes.filter { tree.isInQueryScope($0.id) && predicate($0) }.map(\.id)
     }
 
-    /// Nodes of `kind` whose identifier, title or label equals `key` — what XCUITest's subscript matches.
+    /// Nodes of `kind` that XCUITest's identifier matching would return for `key`.
     private func keyMatches(kind: ElementKind, key: String) -> [Int] {
-        nodesInScope { $0.kind.typeName == kind.typeName && ($0.identifier == key || $0.title == key || $0.label == key) }
+        nodesInScope { $0.kind.typeName == kind.typeName && $0.matchesIdentifier(key) }
     }
 
-    /// Whether a descendant of `id` has the given type and accessibility identifier.
+    /// Whether a descendant of `id` has the given type and matches `identifier` the way `containing(_:identifier:)` does.
     private func contains(_ id: Int, kind: ElementKind, identifier: String) -> Bool {
         var stack = tree.node(id).childIDs
         while let next = stack.popLast() {
             let node = tree.node(next)
-            if node.kind.typeName == kind.typeName && node.identifier == identifier { return true }
+            if node.kind.typeName == kind.typeName && node.matchesIdentifier(identifier) { return true }
             stack.append(contentsOf: node.childIDs)
         }
         return false

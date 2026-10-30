@@ -273,16 +273,19 @@ final class InspectorModel {
         return (hoverStack.count - index, hoverStack.count)
     }
 
-    /// Selects the element under a screenshot click and copies its best query.
-    func pickFromScreenshot(_ id: Int) {
+    /// Selects an element (from the screenshot or the outline) and copies its best query: by identifier, then from a
+    /// unique container, then from an identified anchor, then the full path.
+    func select(_ id: Int?) {
         selectedID = id
-        guard let queries = selectedQueries else { return }
+        guard id != nil, let queries = selectedQueries else { return }
         if let byIdentifier = queries.byIdentifier {
             copy(byIdentifier.code, message: "Copied identifier query")
+        } else if queries.hasUniqueContainer {
+            copy(queries.fromContainer.code, message: "Copied container query")
         } else if let fromAnchor = queries.fromAnchor {
             copy(fromAnchor.code, message: "Copied anchored query")
         } else {
-            copy(queries.fromContainer.code, message: "Copied container query")
+            copy(queries.byHierarchy.code, message: "Copied full path")
         }
     }
 

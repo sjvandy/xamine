@@ -160,3 +160,40 @@ private let tips = makeTree([
         #expect(sample.hitTest(CGPoint(x: 10, y: 10))?.depth == 2)
     }
 }
+
+/// Elements found only by value or placeholder, per Apple's docs: the subscript and `matching(identifier:)` match
+/// identifier, title, label, value or placeholderValue.
+@Suite struct IdentifyingPropertyTests {
+    private static func tree() -> UITree {
+        var nodes = [
+            UINode(id: 0, parentID: nil, depth: 0, kind: .forRole("AXWindow"), role: "AXWindow"),
+            UINode(id: 1, parentID: 0, depth: 1, kind: .forRole("AXTextField"), role: "AXTextField", subrole: "AXSearchField", placeholder: "Search"),
+            UINode(id: 2, parentID: 0, depth: 1, kind: .forRole("AXStaticText"), role: "AXStaticText", value: "Steven’s Pro iPhone"),
+            UINode(id: 3, parentID: 0, depth: 1, kind: .forRole("AXStaticText"), role: "AXStaticText", value: "Steven’s Pro iPhone"),
+            UINode(id: 4, parentID: 0, depth: 1, kind: .forRole("AXStaticText"), role: "AXStaticText", value: "42"),
+        ]
+        nodes[0].childIDs = [1, 2, 3, 4]
+        return UITree(nodes: nodes, appName: "Test", bundleID: "com.example.test", platform: .macOS, windowFrame: .zero)
+    }
+
+    let builder = QueryBuilder(tree: tree(), includeAppDeclaration: false)
+
+    @Test func placeholderUsesSubscript() {
+        let kind = builder.tree.node(1).kind.queryName
+        #expect(builder.identifierSnippet(for: builder.tree.node(1))?.code == "app.\(kind)[\"Search\"]")
+    }
+
+    @Test func duplicateValuesUseMatchingIdentifier() {
+        #expect(builder.identifierSnippet(for: builder.tree.node(3))?.code == #"app.staticTexts.matching(identifier: "Steven’s Pro iPhone").element(boundBy: 1)"#)
+    }
+
+    @Test func numericValuesAreNotKeys() {
+        #expect(builder.identifierSnippet(for: builder.tree.node(4)) == nil)
+    }
+
+    @Test func noPredicatesGenerated() {
+        for id in builder.tree.nodes.indices {
+            #expect(builder.identifierSnippet(for: builder.tree.node(id))?.code.contains("NSPredicate") != true)
+        }
+    }
+}
