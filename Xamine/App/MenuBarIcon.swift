@@ -8,10 +8,10 @@ struct MenuBarIcon: View {
     var body: some View {
         if isAgentActive {
             Image(nsImage: Self.agentPill)
-                .accessibilityLabel("xamine — AI agent active")
+                .accessibilityLabel("Xamine — AI agent active")
         } else {
             Image(systemName: "viewfinder")
-                .accessibilityLabel("xamine")
+                .accessibilityLabel("Xamine")
         }
     }
 

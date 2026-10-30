@@ -23,7 +23,7 @@ targets:
     info:
       path: Xamine/Resources/Info.plist
       properties:
-        CFBundleDisplayName: xamine
+        CFBundleDisplayName: Xamine
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: ""

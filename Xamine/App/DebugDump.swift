@@ -2,7 +2,7 @@
 import AppKit
 
 /// Debug-only: `open -n Xamine.app --args --dump <bundle id> <output path>` scans that app's frontmost
-/// window and writes the tree as indented text, then quits. Runs under xamine's own Accessibility permission.
+/// window and writes the tree as indented text, then quits. Runs under Xamine's own Accessibility permission.
 enum DebugDump {
     @MainActor
     static func runIfRequested() -> Bool {

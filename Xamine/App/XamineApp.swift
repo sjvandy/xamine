@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.didLaunch()
     }
 
-    /// Opening xamine again while it's running starts the picker, like pressing ⌘⇧5.
+    /// Opening Xamine again while it's running starts the picker, like pressing ⌘⇧5.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         AppState.shared.startPicking()
         return false
@@ -68,7 +68,7 @@ private struct MenuContent: View {
         }
         SettingsLink { Text("Settings…") }
             .keyboardShortcut(",")
-        Button("Quit xamine") { NSApp.terminate(nil) }
+        Button("Quit Xamine") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 }
@@ -78,7 +78,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Toggle("Start picking a window when xamine launches", isOn: $pickOnLaunch)
+            Toggle("Start picking a window when Xamine launches", isOn: $pickOnLaunch)
             LabeledContent("Pick a window", value: "⌘⇧X")
             LabeledContent("Inspect under cursor (Spotlight, Control Center, menus)", value: "⌥⌘⇧X")
         }

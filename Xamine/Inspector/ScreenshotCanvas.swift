@@ -63,7 +63,7 @@ struct ScreenshotCanvas: View {
                 ProgressView("Scanning…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView("No Screenshot", systemImage: "photo",
-                                       description: Text("xamine couldn't capture this window. Check Screen Recording permission."))
+                                       description: Text("Xamine couldn't capture this window. Check Screen Recording permission."))
             }
         }
         .padding(20)

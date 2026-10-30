@@ -37,7 +37,7 @@ enum ScanError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notTrusted: "xamine needs Accessibility permission to read other apps' UI."
+        case .notTrusted: "Xamine needs Accessibility permission to read other apps' UI."
         case .windowNotFound: "Couldn't find that window in the app's accessibility tree. The app may not expose accessibility information."
         case .nothingUnderCursor: "Nothing under the cursor exposes accessibility information. If it was a menu or panel, it may have closed."
         }

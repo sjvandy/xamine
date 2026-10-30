@@ -3,7 +3,7 @@ import AppKit
 /// A ⌘⇧5-style picker: covers every screen, highlights the window under the cursor, and reports the one picked.
 ///
 /// Two modes:
-/// - **Click** (`start`): xamine takes focus and the user clicks an app window.
+/// - **Click** (`start`): Xamine takes focus and the user clicks an app window.
 /// - **Hands-off** (`startHandsOff`): the overlay never takes focus or mouse events, so transient system UI like Spotlight,
 ///   Control Center or an open menu stays open. Whatever is under the cursor is picked when the countdown ends
 ///   (or immediately with no countdown).
@@ -150,7 +150,7 @@ final class WindowPickerController {
     /// Owners whose on-screen windows are backdrops rather than UI worth inspecting.
     private static let ignoredOwners: Set<String> = ["WindowManager", "Wallpaper", "Screenshot", "screencaptureui"]
 
-    /// Everything above the desktop, front to back, excluding xamine's own windows: app windows plus system UI
+    /// Everything above the desktop, front to back, excluding Xamine's own windows: app windows plus system UI
     /// such as the menu bar, Dock, Spotlight, Control Center and open menus.
     private static func onScreenWindows() -> [Candidate] {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]

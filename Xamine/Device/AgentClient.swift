@@ -1,7 +1,7 @@
 import Foundation
 import ImageIO
 
-/// Talks to the xamine agent running on an iOS device or simulator (see `Agent/UITests/XamineAgentTests.swift`).
+/// Talks to the Xamine agent running on an iOS device or simulator (see `Agent/UITests/XamineAgentTests.swift`).
 struct AgentClient: Sendable {
     static let port = 8765
 

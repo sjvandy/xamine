@@ -4,7 +4,7 @@ enum CaptureError: LocalizedError {
     case windowNotShareable
 
     var errorDescription: String? {
-        "That window can't be captured. Check that xamine has Screen Recording permission."
+        "That window can't be captured. Check that Xamine has Screen Recording permission."
     }
 }
 
@@ -45,7 +45,7 @@ enum WindowCapture {
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 
-    /// A region of the display, as it appears on screen minus xamine's own windows. System UI such as
+    /// A region of the display, as it appears on screen minus Xamine's own windows. System UI such as
     /// Control Center is often several windows composited together, so a region captures it as seen.
     /// For the desktop, only desktop-level windows (wallpaper, icons, widgets) are included.
     private static func capture(region: CGRect, desktopOnly: Bool, from content: SCShareableContent) async throws -> Result {

@@ -9,8 +9,8 @@ struct AgentHostApp: App {
                 Image(systemName: "viewfinder")
                     .font(.system(size: 48))
                     .foregroundStyle(.tint)
-                Text("xamine agent").font(.title2.bold())
-                Text("Started from xamine on your Mac. You can switch to any app to inspect it.")
+                Text("Xamine Agent").font(.title2.bold())
+                Text("Started from Xamine on your Mac. You can switch to any app to inspect it.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             }

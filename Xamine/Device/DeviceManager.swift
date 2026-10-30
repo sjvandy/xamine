@@ -116,7 +116,7 @@ final class DeviceManager {
                 return
             }
             guard !teamID.trimmingCharacters(in: .whitespaces).isEmpty else {
-                state = .failed("Enter your Apple Development Team ID so xamine can sign the agent for your device.")
+                state = .failed("Enter your Apple Development Team ID so Xamine can sign the agent for your device.")
                 return
             }
         }
@@ -272,7 +272,7 @@ final class DeviceManager {
     /// Copies the bundled agent project somewhere writable, so xcodebuild can build it.
     private static func prepareAgentProject() throws -> URL {
         guard let bundled = Bundle.main.url(forResource: "Agent", withExtension: nil) else {
-            throw AgentError.agent("The agent project is missing from xamine's bundle.")
+            throw AgentError.agent("The agent project is missing from Xamine's bundle.")
         }
         let destination = supportDirectory.appending(path: "Agent", directoryHint: .isDirectory)
         let fileManager = FileManager.default

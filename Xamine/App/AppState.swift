@@ -10,7 +10,7 @@ final class AppState {
     let inspector = InspectorModel()
     let devices = DeviceManager()
     private(set) var recents: [PickedWindow] = []
-    /// True while an AI agent is driving xamine; the menu bar icon turns into the blue AI pill.
+    /// True while an AI agent is driving Xamine; the menu bar icon turns into the blue AI pill.
     var isAgentActive = false
 
     @ObservationIgnored private let picker = WindowPickerController()
@@ -65,7 +65,7 @@ final class AppState {
             showInspector()
             Task { await inspector.load(target) }
         } else {
-            // System UI closes as soon as xamine takes focus, so read it before showing the inspector.
+            // System UI closes as soon as Xamine takes focus, so read it before showing the inspector.
             Task {
                 try? await Task.sleep(for: .milliseconds(60)) // let the picker overlay leave the screen
                 await inspector.load(target)
@@ -78,7 +78,7 @@ final class AppState {
 
     func showInspector() {
         let window = inspectorWindow ?? makeWindow(
-            title: "xamine",
+            title: "Xamine",
             size: NSSize(width: 1280, height: 800),
             content: InspectorView(model: inspector, pickAnother: { [weak self] in self?.startPicking() })
         )
@@ -114,7 +114,7 @@ final class AppState {
 
     func showOnboarding() {
         let window = onboardingWindow ?? makeWindow(
-            title: "Welcome to xamine",
+            title: "Welcome to Xamine",
             size: NSSize(width: 480, height: 360),
             content: OnboardingView(permissions: permissions) { [weak self] in
                 self?.onboardingWindow?.close()
@@ -140,7 +140,7 @@ final class AppState {
         return window
     }
 
-    /// Shows a window and gives xamine a Dock icon while any of its windows are open.
+    /// Shows a window and gives Xamine a Dock icon while any of its windows are open.
     private func present(_ window: NSWindow) {
         NSApp.setActivationPolicy(.regular)
         window.makeKeyAndOrderFront(nil)

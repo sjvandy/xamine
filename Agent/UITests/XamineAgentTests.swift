@@ -1,7 +1,7 @@
 import Network
 import XCTest
 
-/// Runs for as long as xamine needs it: serves the UI hierarchy and screenshots of any app on this device over HTTP.
+/// Runs for as long as Xamine needs it: serves the UI hierarchy and screenshots of any app on this device over HTTP.
 ///
 /// Endpoints (all GET):
 /// - `/status` → `{"ok": true, "device": "...", "port": 8765}`
@@ -133,7 +133,7 @@ final class XamineAgentTests: XCTestCase {
         return node
     }
 
-    /// The Swift case name of an element type, e.g. `.button` → "button", matching what xamine generates.
+    /// The Swift case name of an element type, e.g. `.button` → "button", matching what Xamine generates.
     static func typeName(_ type: XCUIElement.ElementType) -> String {
         switch type {
         case .any: return "any"

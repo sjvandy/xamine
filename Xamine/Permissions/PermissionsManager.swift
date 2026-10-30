@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import Observation
 
-/// Tracks the two system permissions xamine needs.
+/// Tracks the two system permissions Xamine needs.
 @Observable @MainActor
 final class PermissionsManager {
     private(set) var accessibilityGranted = AXIsProcessTrusted()

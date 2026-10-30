@@ -11,8 +11,8 @@ struct OnboardingView: View {
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Welcome to xamine").font(.title2.bold())
-                    Text("Two permissions let xamine read other apps' UI and capture their windows.")
+                    Text("Welcome to Xamine").font(.title2.bold())
+                    Text("Two permissions let Xamine read other apps' UI and capture their windows.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -32,7 +32,7 @@ struct OnboardingView: View {
                 action: permissions.requestScreenRecording
             )
 
-            Text("macOS may ask you to quit and reopen xamine after granting Screen Recording.")
+            Text("macOS may ask you to quit and reopen Xamine after granting Screen Recording.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
