@@ -5,8 +5,10 @@ struct XamineApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
 
     var body: some Scene {
-        MenuBarExtra("xamine", systemImage: "viewfinder") {
+        MenuBarExtra {
             MenuContent(state: AppState.shared)
+        } label: {
+            MenuBarIcon(isAgentActive: AppState.shared.isAgentActive)
         }
         Settings {
             SettingsView()
@@ -54,6 +56,11 @@ private struct MenuContent: View {
                 }
             }
         }
+
+        #if DEBUG
+        Divider()
+        Toggle("Preview AI Agent Icon", isOn: Bindable(state).isAgentActive)
+        #endif
 
         Divider()
         if !state.permissions.allGranted {

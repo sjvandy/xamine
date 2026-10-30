@@ -10,6 +10,8 @@ final class AppState {
     let inspector = InspectorModel()
     let devices = DeviceManager()
     private(set) var recents: [PickedWindow] = []
+    /// True while an AI agent is driving xamine; the menu bar icon turns into the blue AI pill.
+    var isAgentActive = false
 
     @ObservationIgnored private let picker = WindowPickerController()
     @ObservationIgnored private var hotKeys: [HotKey] = []

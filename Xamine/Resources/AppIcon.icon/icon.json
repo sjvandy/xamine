@@ -1,0 +1,193 @@
+{
+  "features" : [
+    "refractivity"
+  ],
+  "fill" : {
+    "automatic-gradient" : "gray:0.85369,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "viewfinder.svg",
+          "name" : "viewfinder",
+          "position" : {
+            "scale" : 1.5,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "automatic"
+            }
+          ],
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "slice1.png",
+          "name" : "slice1",
+          "position" : {
+            "scale" : 1.56,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 1
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "-path.png",
+          "name" : "-path",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              120,
+              -120
+            ]
+          }
+        },
+        {
+          "image-name" : "-path 7.png",
+          "name" : "-path 7",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              120,
+              120
+            ]
+          }
+        },
+        {
+          "image-name" : "-path 4.png",
+          "name" : "-path 4",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -120,
+              120
+            ]
+          }
+        },
+        {
+          "image-name" : "-path 3.png",
+          "name" : "-path 3",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -120,
+              -110
+            ]
+          }
+        },
+        {
+          "image-name" : "-path 2.png",
+          "name" : "-path 2"
+        }
+      ],
+      "refractivity" : {
+        "depth" : 0.326796875,
+        "enabled" : true,
+        "strength" : 0.435625
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.75
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill" : "automatic",
+          "image-name" : "outer 2.png",
+          "name" : "outer 2",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              233.0000000000001
+            ]
+          }
+        }
+      ],
+      "name" : "Group",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "overlay"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "automatic"
+            }
+          ],
+          "glass" : false,
+          "image-name" : "dots.png",
+          "name" : "dots",
+          "opacity-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : 0.25
+            }
+          ]
+        }
+      ],
+      "lighting" : "combined",
+      "refractivity" : {
+        "depth" : 0,
+        "enabled" : true,
+        "strength" : 0.0051171875
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 1
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
