@@ -337,7 +337,7 @@ private final class PickerOverlayView: NSView {
         guard let window, let screen = window.screen, let controller else { return }
 
         if controller.isHandsOff {
-            drawHint("Inspecting what's under the cursor in \(controller.secondsRemaining)…  ·  ⌥⌘⇧X to pick now", in: bounds)
+            drawHint("Inspecting what's under the cursor in \(controller.secondsRemaining)…  ·  \(ShortcutStore.shared.handsOff.displayString) to pick now", in: bounds)
         }
 
         guard let hovered = controller.hovered else {

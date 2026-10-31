@@ -21,15 +21,26 @@ final class AppState {
     @ObservationIgnored private var windowCloseObserver: NSObjectProtocol?
 
     func didLaunch() {
+        let shortcuts = ShortcutStore.shared
         hotKeys = [
-            HotKey { [weak self] in self?.startPicking() },
-            HotKey(modifiers: cmdKey | shiftKey | optionKey) { [weak self] in self?.startHandsOff(delay: 0) },
+            HotKey(keyCode: shortcuts.inspect.keyCode, modifiers: shortcuts.inspect.modifiers) { [weak self] in self?.startPicking() },
+            HotKey(keyCode: shortcuts.handsOff.keyCode, modifiers: shortcuts.handsOff.modifiers) { [weak self] in self?.startHandsOff(delay: 0) },
         ]
+        shortcuts.onChange = { [weak self] in self?.applyShortcuts() }
         if !permissions.allGranted {
             showOnboarding()
         } else if UserDefaults.standard.bool(forKey: "pickOnLaunch") {
             startPicking()
         }
+    }
+
+    var hotKeysRegistered: Bool { hotKeys.allSatisfy(\.isRegistered) }
+
+    private func applyShortcuts() {
+        let shortcuts = ShortcutStore.shared
+        guard hotKeys.count == 2 else { return }
+        hotKeys[0].update(keyCode: shortcuts.inspect.keyCode, modifiers: shortcuts.inspect.modifiers)
+        hotKeys[1].update(keyCode: shortcuts.handsOff.keyCode, modifiers: shortcuts.handsOff.modifiers)
     }
 
     func startPicking() {

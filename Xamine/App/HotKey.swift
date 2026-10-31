@@ -1,6 +1,5 @@
 import Carbon.HIToolbox
 
-/// A system-wide keyboard shortcut registered through Carbon (needs no extra permission).
 @MainActor
 final class HotKey {
     private var reference: EventHotKeyRef?
@@ -8,21 +7,38 @@ final class HotKey {
     private nonisolated(unsafe) static var handlerInstalled = false
     private static var nextID: UInt32 = 1
     private let id: UInt32
+    private(set) var isRegistered = false
 
-    /// Defaults to ⌘⇧X.
     init(keyCode: Int = kVK_ANSI_X, modifiers: Int = cmdKey | shiftKey, action: @escaping @MainActor () -> Void) {
         id = Self.nextID
         Self.nextID += 1
         Self.installHandlerIfNeeded()
         Self.actions[id] = { MainActor.assumeIsolated(action) }
-
-        let hotKeyID = EventHotKeyID(signature: OSType(0x5841_4D4E), id: id) // 'XAMN'
-        RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &reference)
+        isRegistered = register(keyCode: keyCode, modifiers: modifiers)
     }
 
     isolated deinit {
-        if let reference { UnregisterEventHotKey(reference) }
+        unregister()
         Self.actions[id] = nil
+    }
+
+    @discardableResult
+    func update(keyCode: Int, modifiers: Int) -> Bool {
+        unregister()
+        isRegistered = register(keyCode: keyCode, modifiers: modifiers)
+        return isRegistered
+    }
+
+    private func register(keyCode: Int, modifiers: Int) -> Bool {
+        let hotKeyID = EventHotKeyID(signature: OSType(0x5841_4D4E), id: id)
+        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &reference)
+        if status != noErr { reference = nil }
+        return status == noErr
+    }
+
+    private func unregister() {
+        if let reference { UnregisterEventHotKey(reference) }
+        reference = nil
     }
 
     private static func installHandlerIfNeeded() {

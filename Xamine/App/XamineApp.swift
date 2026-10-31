@@ -33,12 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private struct MenuContent: View {
     let state: AppState
+    let shortcuts = ShortcutStore.shared
 
     var body: some View {
         Button("Inspect Application…") { state.startPicking() }
-            .keyboardShortcut("x", modifiers: [.command, .shift])
+            .keyboardShortcut(shortcuts.inspect.keyEquivalent, modifiers: shortcuts.inspect.eventModifiers)
         Button("Inspect Under Cursor") { state.startHandsOff(delay: 0) }
-            .keyboardShortcut("x", modifiers: [.command, .shift, .option])
+            .keyboardShortcut(shortcuts.handsOff.keyEquivalent, modifiers: shortcuts.handsOff.eventModifiers)
         Button("Inspect Under Cursor in 5 Seconds") { state.startHandsOff(delay: 5) }
 
         Button("Inspect iOS Device…") { state.showDevices() }
@@ -81,8 +82,11 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Toggle("Start picking a window when Xamine launches", isOn: $pickOnLaunch)
-            LabeledContent("Pick a window", value: "⌘⇧X")
-            LabeledContent("Inspect under cursor (Spotlight, Control Center, menus)", value: "⌥⌘⇧X")
+            Section("Shortcuts") {
+                ShortcutRecorderView(title: "Pick a window", action: .inspect, store: ShortcutStore.shared)
+                ShortcutRecorderView(title: "Inspect under cursor", action: .handsOff, store: ShortcutStore.shared)
+                Button("Restore Defaults") { ShortcutStore.shared.resetAll() }
+            }
         }
         .formStyle(.grouped)
         .frame(width: 420)
