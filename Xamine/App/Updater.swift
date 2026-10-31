@@ -151,7 +151,7 @@ final class Updater {
             throw UpdateError.invalidSignature
         }
         var requirement: SecRequirement?
-        var text = "identifier \"com.xamine.Xamine\""
+        var text = "identifier \"\(Bundle.main.bundleIdentifier ?? "com.sjvandy.Xamine")\""
         if runningTeamIdentifier() != nil {
             text = "anchor apple generic and \(text) and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
         }
@@ -197,6 +197,13 @@ final class Updater {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Xamine \(release.version) is available"
+        #if DEBUG
+        alert.informativeText = "You have \(Self.currentVersion). This is a Debug build, so Xamine won't replace it. Download the release instead."
+        alert.addButton(withTitle: "Open Release Page")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(release.htmlURL) }
+        return false
+        #else
         alert.informativeText = "You have \(Self.currentVersion). Xamine will quit, install the new version and reopen."
         alert.addButton(withTitle: "Install and Relaunch")
         alert.addButton(withTitle: "Later")
@@ -210,6 +217,7 @@ final class Updater {
         default:
             return false
         }
+        #endif
     }
 
     private func alert(_ title: String, _ message: String) {

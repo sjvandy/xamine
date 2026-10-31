@@ -1,6 +1,6 @@
 name: Xamine
 options:
-  bundleIdPrefix: com.xamine
+  bundleIdPrefix: com.sjvandy
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -8,7 +8,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   Xamine:
@@ -35,11 +35,11 @@ targets:
         com.apple.security.app-sandbox: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.xamine.Xamine
+        PRODUCT_BUNDLE_IDENTIFIER: com.sjvandy.Xamine
         PRODUCT_NAME: Xamine
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_IDENTITY: "Developer ID Application"
         DEVELOPMENT_TEAM: 2R8MRUP265
         GENERATE_INFOPLIST_FILE: false
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -52,10 +52,10 @@ targets:
       - target: Xamine
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.xamine.XamineTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.sjvandy.XamineTests
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_IDENTITY: "Developer ID Application"
         DEVELOPMENT_TEAM: 2R8MRUP265
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Xamine.app/Contents/MacOS/Xamine"

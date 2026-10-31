@@ -13,6 +13,13 @@ cd "$ROOT"
 xcodegen generate
 xcodebuild -project Xamine.xcodeproj -scheme Xamine -configuration Release -derivedDataPath "$DERIVED_DATA" build
 
+codesign --verify --strict "$APP"
+SIGNATURE="$(codesign -dvv "$APP" 2>&1)"
+if ! grep -q "^Authority=Developer ID Application: .*(2R8MRUP265)" <<< "$SIGNATURE"; then
+    echo "Xamine.app isn't signed with Developer ID (2R8MRUP265); install the certificate and retry." >&2
+    exit 1
+fi
+
 rm -rf "$STAGING" "$DMG"
 mkdir -p "$STAGING"
 ditto "$APP" "$STAGING/Xamine.app"
