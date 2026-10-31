@@ -28,3 +28,13 @@ open Xamine.xcodeproj
 ```
 
 Xamine needs **Accessibility** and **Screen Recording** permission; it walks you through granting them on first launch. It can't be sandboxed, because the Accessibility API can't read other apps from inside the sandbox.
+
+## Releases
+
+*Check for Updates…* in the menu bar reads the latest release of `sjvandy/xamine` from GitHub. If it's newer, it offers to install it, replaces the app and relaunches. To ship an update:
+
+1. Bump `MARKETING_VERSION` in `project.yml`.
+2. Run `Packaging/make-dmg.sh`.
+3. Publish a GitHub release tagged `v<version>` with `build/Xamine-<version>.dmg` attached.
+
+The repository must be public for installed copies to see its releases.

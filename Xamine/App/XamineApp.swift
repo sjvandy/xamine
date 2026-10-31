@@ -68,6 +68,8 @@ private struct MenuContent: View {
         }
         SettingsLink { Text("Settings…") }
             .keyboardShortcut(",")
+        Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+            .disabled(Updater.shared.isChecking)
         Button("Quit Xamine") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
