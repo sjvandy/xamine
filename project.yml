@@ -16,10 +16,19 @@ targets:
     platform: macOS
     sources:
       - Xamine
+      - Shared
       # The on-device agent's project, copied into the app and built for the user's device at runtime.
       - path: Agent
         type: folder
         buildPhase: resources
+    dependencies:
+      # The `xamine` CLI / MCP server, shipped at Xamine.app/Contents/Helpers/xamine.
+      - target: xamine-cli
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: Xamine/Resources/Info.plist
       properties:
@@ -43,6 +52,23 @@ targets:
         DEVELOPMENT_TEAM: 2R8MRUP265
         GENERATE_INFOPLIST_FILE: false
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  xamine-cli:
+    type: tool
+    platform: macOS
+    sources:
+      - CLI
+      - Shared
+    settings:
+      base:
+        PRODUCT_NAME: xamine
+        # Distinct from the app's `Xamine` module, which a case-insensitive file system would confuse it with.
+        PRODUCT_MODULE_NAME: XamineCLI
+        PRODUCT_BUNDLE_IDENTIFIER: com.sjvandy.Xamine.cli
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        DEVELOPMENT_TEAM: 2R8MRUP265
+        SKIP_INSTALL: true
   XamineTests:
     type: bundle.unit-test
     platform: macOS

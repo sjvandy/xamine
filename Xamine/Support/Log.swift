@@ -5,4 +5,5 @@ enum Log {
     static let picker = Logger(subsystem: "com.xamine.Xamine", category: "picker")
     static let scan = Logger(subsystem: "com.xamine.Xamine", category: "scan")
     static let capture = Logger(subsystem: "com.xamine.Xamine", category: "capture")
+    static let automation = Logger(subsystem: "com.xamine.Xamine", category: "automation")
 }

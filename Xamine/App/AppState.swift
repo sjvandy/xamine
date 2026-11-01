@@ -14,6 +14,7 @@ final class AppState {
     var isAgentActive = false
 
     @ObservationIgnored private let picker = WindowPickerController()
+    @ObservationIgnored private lazy var automation = AutomationServer(service: AutomationService(permissions: permissions))
     @ObservationIgnored private var hotKeys: [HotKey] = []
     @ObservationIgnored private var inspectorWindow: NSWindow?
     @ObservationIgnored private var onboardingWindow: NSWindow?
@@ -21,6 +22,10 @@ final class AppState {
     @ObservationIgnored private var windowCloseObserver: NSObjectProtocol?
 
     func didLaunch() {
+        // AI agents and scripts drive Xamine through the `xamine` helper, which talks to this socket.
+        automation.onActivityChange = { [weak self] active in self?.isAgentActive = active }
+        automation.start()
+
         let shortcuts = ShortcutStore.shared
         hotKeys = [
             HotKey(keyCode: shortcuts.inspect.keyCode, modifiers: shortcuts.inspect.modifiers) { [weak self] in self?.startPicking() },
