@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Xamine – Native UI inspection for Apple QA and automation teams</title>
-<meta name="description" content="A native macOS tool for QA and automation teams. Point at any element in your app, on your Mac, iPhone or iPad, and copy a ready-to-use XCUITest query.">
+<title>Xamine – UI inspection and automation for Apple QA teams and AI agents</title>
+<meta name="description" content="A native macOS tool for QA and automation teams. Point at any element in your app, on your Mac, iPhone or iPad, and copy a ready-to-use XCUITest query, or let your AI agent write and fix the UI tests.">
 <meta property="og:title" content="Xamine">
 <meta property="og:description" content="Your automation companion for Apple platforms.">
 <meta property="og:image" content="https://sjvandy.github.io/xamine/screenshot.png">
@@ -96,6 +96,8 @@ h2 { font-size: clamp(30px, 4.5vw, 46px); letter-spacing: -0.03em; line-height: 
 }
 .card h3 { font-size: 20px; letter-spacing: -0.015em; margin-bottom: 8px; }
 .card p { color: var(--muted); font-size: 15.5px; }
+.card code { font: 13.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--accent); }
+.card b { color: var(--text); font-weight: 600; }
 kbd {
     font: 600 13px/1 ui-monospace, "SF Mono", Menlo, monospace; background: rgba(255, 255, 255, 0.1);
     border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 3px 6px; white-space: nowrap;
@@ -205,15 +207,16 @@ footer a:hover { color: var(--text); }
         <a class="brand" href="#"><img src="icon.png" alt="">Xamine</a>
         <div class="links">
             <a href="#how">How it works</a>
+            <a href="#agents">AI agents</a>
             <a href="#devices">iPhone &amp; iPad</a>
             <a href="https://github.com/sjvandy/xamine">GitHub</a>
         </div>
     </nav>
 
     <header class="hero">
-        <span class="pill"><b>New in 0.4.0</b> · Inspect real iPhones and iPads</span>
+        <span class="pill"><b>New in 0.5.0</b> · Built for AI agents</span>
         <h1>Your automation companion<br><span class="grad">for Apple platforms.</span></h1>
-        <p class="lead">A native macOS tool for QA and automation teams. Point at any element in your app, on your Mac, iPhone or iPad, and copy a ready-to-use XCUITest query.</p>
+        <p class="lead">A native macOS tool for QA and automation teams. Point at any element in your app, on your Mac, iPhone or iPad, and copy a ready-to-use XCUITest query. Or hand the job to your AI agent and get a passing UI test back.</p>
         <div class="cta">
             <a class="btn primary" href="https://github.com/sjvandy/xamine/releases/latest">Download for macOS</a>
             <a class="btn ghost" href="https://github.com/sjvandy/xamine">View on GitHub</a>
@@ -266,6 +269,39 @@ app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">e
         </div>
     </section>
 
+    <section id="agents">
+        <h2>Let your AI agent write the UI tests</h2>
+        <p class="sub">Xamine gives Claude and other AI agents hands and eyes on your Mac apps. They explore, click and type, then hand you an XCUITest that passes, or tell you exactly why one broke.</p>
+        <div class="steps">
+            <div class="card step">
+                <h3>Set up</h3>
+                <p>Choose <b>Set Up AI Agents…</b> in the menu bar. Xamine adds its MCP server and a skill to Claude Code and Claude in Xcode.</p>
+            </div>
+            <div class="card step">
+                <h3>Ask</h3>
+                <p>“Create a UI test that orders a large Cold Brew and checks the cart.” Or: “This UI test fails. Find out why and fix it.”</p>
+            </div>
+            <div class="card step">
+                <h3>Get a passing test</h3>
+                <p>The agent records what it does into a complete <code>XCTestCase</code>, or diagnoses the failing query against the live UI.</p>
+            </div>
+        </div>
+
+        <div class="code" aria-label="An AI agent diagnosing a failing UI test with Xamine, then the test it recorded">
+            <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// resolve_query  app.windows["Shopping Cart"]</span>
+1. .windows           → 1 element
+2. ["Shopping Cart"]  → 0 elements   <span class="k">← stops matching here</span>
+Step 2 had 1 element to choose from:
+  e0 Window title=<span class="s">"Cart"</span>   query: app.<span class="f">windows</span>[<span class="s">"Cart"</span>]
+
+<span class="c">// recorded by the agent, passing on the first run</span>
+<span class="k">let</span> drinkColdBrewButton = app.<span class="f">buttons</span>[<span class="s">"drink-cold-brew"</span>]
+XCTAssertTrue(drinkColdBrewButton.<span class="f">waitForExistence</span>(timeout: <span class="s">5</span>))
+drinkColdBrewButton.<span class="f">click</span>()</pre>
+        </div>
+    </section>
+
     <section id="platforms">
         <h2>One inspector for every screen</h2>
         <p class="sub">The same hierarchy and queries on iPhone, iPad and Mac, shown here with a demo coffee-ordering app.</p>
@@ -290,7 +326,7 @@ app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">e
         <div class="features">
             <div class="card"><div class="icon">⌥</div><h3>Inspect what closes</h3><p><kbd>⌥⌘⇧X</kbd> inspects whatever is under the cursor without taking focus: menus, Spotlight, Control Center, the Dock and Notification Center.</p></div>
             <div class="card"><div class="icon">🎯</div><h3>Smart picks</h3><p>When an unlabeled view sits on a labeled cell, Xamine picks the cell, so your query reads well and survives layout changes.</p></div>
-            <div class="card"><div class="icon">⌨️</div><h3>Your shortcuts</h3><p>Record your own global shortcuts in Settings. Xamine lives in the menu bar and stays out of the way.</p></div>
+            <div class="card"><div class="icon">✨</div><h3>Agent-ready</h3><p>An MCP server, a command-line tool and a Claude skill let AI agents inspect and drive Mac apps, record tests and repair failing ones.</p></div>
             <div class="card"><div class="icon">📱</div><h3>Simulator too</h3><p>Pick the iOS Simulator window to inspect the running app, with the same element types XCUITest sees.</p></div>
             <div class="card"><div class="icon">🔄</div><h3>Self-updating</h3><p>Check for Updates in the menu bar installs the newest release and relaunches.</p></div>
             <div class="card"><div class="icon">🔒</div><h3>Private</h3><p>Everything runs on your Mac. Accessibility and Screen Recording are the only permissions it asks for.</p></div>
@@ -320,7 +356,7 @@ app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">e
     <section class="final">
         <img class="icon" src="icon.png" alt="">
         <h2>Stop guessing at selectors</h2>
-        <p class="sub">Requires macOS with Accessibility and Screen Recording permission. Device inspection needs Xcode and a trusted device with Developer Mode on.</p>
+        <p class="sub">Requires macOS with Accessibility and Screen Recording permission. Device inspection needs Xcode and a trusted device with Developer Mode on. AI agent setup needs Claude Code.</p>
         <div class="cta">
             <a class="btn primary" href="https://github.com/sjvandy/xamine/releases/latest">Download Xamine</a>
             <a class="btn ghost" href="https://github.com/sjvandy/xamine#readme">Read the docs</a>

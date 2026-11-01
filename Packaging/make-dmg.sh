@@ -20,6 +20,13 @@ if ! grep -q "^Authority=Developer ID Application: .*(2R8MRUP265)" <<< "$SIGNATU
     exit 1
 fi
 
+# The xamine helper is how AI agents and scripts reach Xamine; a release without it can't be driven.
+HELPER="$APP/Contents/Helpers/xamine"
+if [[ ! -x "$HELPER" ]] || ! codesign --verify --strict "$HELPER"; then
+    echo "Xamine.app is missing a signed Contents/Helpers/xamine; check the xamine-cli target in project.yml." >&2
+    exit 1
+fi
+
 rm -rf "$STAGING" "$DMG"
 mkdir -p "$STAGING"
 ditto "$APP" "$STAGING/Xamine.app"
