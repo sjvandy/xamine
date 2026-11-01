@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xamine – Click any UI element, get its XCUITest query</title>
+<meta name="description" content="Xamine is a menu bar app for macOS that inspects any app's UI, on your Mac or a connected iPhone or iPad, and writes the XCUITest query for the element you click.">
+<meta property="og:title" content="Xamine">
+<meta property="og:description" content="Click any UI element on your Mac, iPhone or iPad and get its XCUITest query.">
+<meta property="og:image" content="https://sjvandy.github.io/xamine/screenshot.png">
+<link rel="icon" href="icon.png">
+<style>
+:root {
+    --bg: #07080c;
+    --panel: rgba(255, 255, 255, 0.04);
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #f4f5f8;
+    --muted: #9aa0ae;
+    --accent: #6c8cff;
+    --accent2: #b36cff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+.glow {
+    position: absolute; inset: 0 0 auto 0; height: 900px; z-index: -1; pointer-events: none;
+    background:
+        radial-gradient(600px 400px at 25% 10%, rgba(108, 140, 255, 0.28), transparent 70%),
+        radial-gradient(600px 400px at 78% 18%, rgba(179, 108, 255, 0.22), transparent 70%);
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; letter-spacing: -0.01em; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+nav .links { display: flex; gap: 26px; align-items: center; color: var(--muted); font-size: 15px; }
+nav .links a:hover { color: var(--text); }
+
+.hero { text-align: center; padding: 72px 0 40px; }
+.pill {
+    display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--panel); color: var(--muted); font-size: 14px; margin-bottom: 28px;
+}
+.pill b { color: var(--text); font-weight: 600; }
+h1 {
+    font-size: clamp(40px, 7vw, 76px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 750;
+    max-width: 880px; margin: 0 auto;
+}
+.grad {
+    background: linear-gradient(100deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.lead { color: var(--muted); font-size: clamp(18px, 2.2vw, 21px); max-width: 640px; margin: 24px auto 0; }
+.cta { display: flex; gap: 14px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
+.btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 13px 24px; border-radius: 12px;
+    font-weight: 600; font-size: 16px; transition: transform .15s, box-shadow .15s, background .15s;
+}
+.btn.primary { background: linear-gradient(100deg, var(--accent), var(--accent2)); box-shadow: 0 8px 30px rgba(108, 140, 255, 0.35); }
+.btn.primary:hover { transform: translateY(-2px); box-shadow: 0 12px 38px rgba(108, 140, 255, 0.5); }
+.btn.ghost { border: 1px solid var(--line); background: var(--panel); }
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.08); }
+.fine { color: var(--muted); font-size: 14px; margin-top: 16px; }
+
+.shot { margin: 64px auto 0; position: relative; max-width: 980px; }
+.shot::before {
+    content: ""; position: absolute; inset: 8% 6% -6%; z-index: -1; border-radius: 40px; filter: blur(60px);
+    background: linear-gradient(100deg, rgba(108, 140, 255, 0.45), rgba(179, 108, 255, 0.35));
+}
+.shot img {
+    display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+}
+
+section { padding: 110px 0 0; }
+h2 { font-size: clamp(30px, 4.5vw, 46px); letter-spacing: -0.03em; line-height: 1.1; text-align: center; font-weight: 720; }
+.sub { color: var(--muted); text-align: center; max-width: 600px; margin: 16px auto 0; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 54px; counter-reset: step; }
+.card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px;
+    transition: border-color .2s, transform .2s;
+}
+.card:hover { border-color: rgba(108, 140, 255, 0.45); transform: translateY(-3px); }
+.step::before {
+    counter-increment: step; content: counter(step);
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; margin-bottom: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); font-weight: 700; font-size: 15px;
+}
+.card h3 { font-size: 20px; letter-spacing: -0.015em; margin-bottom: 8px; }
+.card p { color: var(--muted); font-size: 15.5px; }
+kbd {
+    font: 600 13px/1 ui-monospace, "SF Mono", Menlo, monospace; background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 3px 6px; white-space: nowrap;
+}
+
+.code {
+    margin: 54px auto 0; max-width: 760px; border-radius: 16px; border: 1px solid var(--line);
+    background: #0d0f16; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.code .bar { display: flex; gap: 7px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.code .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3d48; }
+.code .bar i:nth-child(1) { background: #ff5f57; }
+.code .bar i:nth-child(2) { background: #febc2e; }
+.code .bar i:nth-child(3) { background: #28c840; }
+.code pre {
+    padding: 22px 24px; font: 14.5px/1.8 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; color: #c9d1e6;
+}
+.code .c { color: #626a80; }
+.code .k { color: #b36cff; }
+.code .s { color: #7ee0a8; }
+.code .f { color: #6c8cff; }
+
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 54px; }
+.features .icon { font-size: 26px; margin-bottom: 14px; }
+
+.device {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; margin-top: 54px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 24px; padding: 44px;
+}
+.device h3 { font-size: 28px; letter-spacing: -0.025em; line-height: 1.15; margin-bottom: 14px; }
+.device p { color: var(--muted); }
+.device ul { list-style: none; margin-top: 20px; display: grid; gap: 10px; }
+.device li { padding-left: 28px; position: relative; font-size: 15.5px; }
+.device li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+.phone {
+    margin: 0 auto; width: 210px; aspect-ratio: 9 / 19; border-radius: 38px; border: 6px solid #22252f;
+    background: linear-gradient(160deg, #141826, #0b0d14); position: relative;
+    box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(108, 140, 255, 0.25);
+}
+.phone::before {
+    content: ""; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    width: 64px; height: 18px; border-radius: 12px; background: #000;
+}
+.phone .row { position: absolute; left: 14px; right: 14px; height: 38px; border-radius: 9px; background: rgba(255, 255, 255, 0.07); }
+.phone .row:nth-of-type(1) { top: 56px; }
+.phone .row:nth-of-type(2) { top: 106px; }
+.phone .row:nth-of-type(3) { top: 156px; }
+.phone .row:nth-of-type(4) { top: 206px; }
+.phone .hit {
+    position: absolute; left: 10px; right: 10px; top: 102px; height: 46px; border-radius: 10px;
+    border: 2px solid var(--accent); background: rgba(108, 140, 255, 0.16);
+    box-shadow: 0 0 30px rgba(108, 140, 255, 0.5); animation: pulse 2.6s ease-in-out infinite;
+}
+.phone .tag {
+    position: absolute; left: 50%; top: 152px; transform: translateX(-50%); white-space: nowrap;
+    background: var(--accent); color: #fff; font: 600 11px ui-monospace, Menlo, monospace; padding: 4px 8px; border-radius: 6px;
+}
+@keyframes pulse { 50% { box-shadow: 0 0 45px rgba(179, 108, 255, 0.75); border-color: var(--accent2); } }
+
+.final { text-align: center; padding: 120px 0 90px; }
+.final .icon { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 20px 50px rgba(108, 140, 255, 0.35); margin-bottom: 26px; }
+.final .cta { margin-top: 30px; }
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 820px) {
+    .steps, .features { grid-template-columns: 1fr; }
+    .device { grid-template-columns: 1fr; padding: 28px; }
+    nav .links a:not(.btn) { display: none; }
+    section { padding-top: 80px; }
+}
+@media (prefers-reduced-motion: reduce) { .phone .hit { animation: none; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="wrap">
+    <nav>
+        <a class="brand" href="#"><img src="icon.png" alt="">Xamine</a>
+        <div class="links">
+            <a href="#how">How it works</a>
+            <a href="#devices">iPhone &amp; iPad</a>
+            <a href="https://github.com/sjvandy/xamine">GitHub</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <span class="pill"><b>New in 0.4.0</b> · Inspect real iPhones and iPads</span>
+        <h1>Click any element.<br><span class="grad">Get the XCUITest query.</span></h1>
+        <p class="lead">Xamine is a menu bar app that inspects the UI of any app on your Mac, iPhone or iPad and writes the query for whatever you click.</p>
+        <div class="cta">
+            <a class="btn primary" href="https://github.com/sjvandy/xamine/releases/latest">Download for macOS</a>
+            <a class="btn ghost" href="https://github.com/sjvandy/xamine">View on GitHub</a>
+        </div>
+        <p class="fine">Free and open source · Signed with Developer ID · Updates itself</p>
+
+        <div class="shot">
+            <img src="screenshot.png" alt="Xamine inspecting an app: window screenshot on the left, element hierarchy and generated XCUITest queries on the right">
+        </div>
+    </header>
+</div>
+
+<main class="wrap">
+    <section id="how">
+        <h2>From click to query in seconds</h2>
+        <p class="sub">No more guessing at identifiers or walking the hierarchy by hand.</p>
+        <div class="steps">
+            <div class="card step">
+                <h3>Pick</h3>
+                <p>Press <kbd>⌘⇧X</kbd> and choose a window, like the <kbd>⌘⇧5</kbd> picker. Connected devices appear as buttons on the edge of the screen.</p>
+            </div>
+            <div class="card step">
+                <h3>Inspect</h3>
+                <p>See the window's screenshot beside its full element hierarchy. Click an element in either one to select it.</p>
+            </div>
+            <div class="card step">
+                <h3>Copy</h3>
+                <p>Get two queries for the element, by identifier or label and by hierarchy position. Click one to copy it.</p>
+            </div>
+        </div>
+
+        <div class="code" aria-label="Example generated queries">
+            <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// by identifier / label</span>
+app.<span class="f">buttons</span>[<span class="s">"Add to Cart"</span>]
+
+<span class="c">// by hierarchy position</span>
+app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">element</span>(boundBy: <span class="s">2</span>).<span class="f">buttons</span>.<span class="f">firstMatch</span></pre>
+        </div>
+    </section>
+
+    <section>
+        <h2>Built for the way you test</h2>
+        <div class="features">
+            <div class="card"><div class="icon">⌥</div><h3>Inspect what closes</h3><p><kbd>⌥⌘⇧X</kbd> inspects whatever is under the cursor without taking focus: menus, Spotlight, Control Center, the Dock and Notification Center.</p></div>
+            <div class="card"><div class="icon">🎯</div><h3>Smart picks</h3><p>When an unlabeled view sits on a labeled cell, Xamine picks the cell, so your query reads well and survives layout changes.</p></div>
+            <div class="card"><div class="icon">⌨️</div><h3>Your shortcuts</h3><p>Record your own global shortcuts in Settings. Xamine lives in the menu bar and stays out of the way.</p></div>
+            <div class="card"><div class="icon">📱</div><h3>Simulator too</h3><p>Pick the iOS Simulator window to inspect the running app, with the same element types XCUITest sees.</p></div>
+            <div class="card"><div class="icon">🔄</div><h3>Self-updating</h3><p>Check for Updates in the menu bar installs the newest release and relaunches.</p></div>
+            <div class="card"><div class="icon">🔒</div><h3>Private</h3><p>Everything runs on your Mac. Accessibility and Screen Recording are the only permissions it asks for.</p></div>
+        </div>
+    </section>
+
+    <section id="devices">
+        <h2>Now on real devices</h2>
+        <p class="sub">Version 0.4.0 inspects apps on a connected iPhone or iPad.</p>
+        <div class="device">
+            <div>
+                <h3>Pick a device from the edge of your screen</h3>
+                <p>Xamine builds a small XCUITest agent, installs it and connects over the CoreDevice tunnel. What it reads is the same snapshot XCUITest uses, so the queries match exactly.</p>
+                <ul>
+                    <li>Plug in or unplug and the device list updates right away</li>
+                    <li>The agent recovers when the device locks or reconnects</li>
+                    <li>Portrait and landscape both line up</li>
+                    <li>Follow the foreground app, or choose one</li>
+                </ul>
+            </div>
+            <div class="phone" aria-hidden="true">
+                <div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div>
+                <div class="hit"></div>
+                <div class="tag">buttons["Continue"]</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="final">
+        <img class="icon" src="icon.png" alt="">
+        <h2>Stop guessing at selectors</h2>
+        <p class="sub">Requires macOS with Accessibility and Screen Recording permission. Device inspection needs Xcode and a trusted device with Developer Mode on.</p>
+        <div class="cta">
+            <a class="btn primary" href="https://github.com/sjvandy/xamine/releases/latest">Download Xamine</a>
+            <a class="btn ghost" href="https://github.com/sjvandy/xamine#readme">Read the docs</a>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <div class="wrap">
+        <span>Xamine</span>
+        <span><a href="https://github.com/sjvandy/xamine">GitHub</a> · <a href="https://github.com/sjvandy/xamine/releases">Releases</a></span>
+    </div>
+</footer>
+</body>
+</html>
