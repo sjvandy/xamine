@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.didLaunch()
     }
 
+    /// Leaves no device in "Automation Running". A force quit can't run this; the agent's idle timeout covers that.
+    func applicationWillTerminate(_ notification: Notification) {
+        AppState.shared.devices.stopAgentBeforeQuitting()
+    }
+
     /// Opening Xamine again while it's running starts the picker, like pressing ⌘⇧5.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         AppState.shared.startPicking()

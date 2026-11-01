@@ -2,6 +2,8 @@ import Network
 import XCTest
 
 /// Runs for as long as Xamine needs it: serves the UI hierarchy and screenshots of any app on this device over HTTP.
+/// Xamine checks in every few seconds; if it goes quiet for `idleTimeout` (it quit, was force quit or crashed), the
+/// agent ends its test, which ends the device's "Automation Running" session.
 ///
 /// Endpoints (all GET):
 /// - `/status` → `{"ok": true, "device": "...", "port": 8765}`
@@ -22,9 +24,13 @@ import XCTest
 /// - `/wait?bundleId=&steps=&timeout=&gone=0|1`
 final class XamineAgentTests: XCTestCase {
     static let port: NWEndpoint.Port = 8765
+    /// How long to keep running without hearing from Xamine, which sends `/status` every 10 seconds.
+    static let idleTimeout: TimeInterval = 30
 
     private var listener: NWListener?
     private var shouldStop = false
+    /// When the last request started or finished. Only touched on the main thread.
+    private var lastContact = Date()
     /// Failures from XCUITest calls made for a request. They're reported back to Xamine rather than recorded against
     /// this test, which would end it (and the agent) at the next `/shutdown`.
     private var issues: [String] = []
@@ -47,6 +53,10 @@ final class XamineAgentTests: XCTestCase {
         // XCUITest calls must run on the main thread, so keep the main run loop serving requests.
         while !shouldStop {
             RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+            if Date().timeIntervalSince(lastContact) > Self.idleTimeout {
+                print("XAMINE_AGENT_IDLE no request from Xamine for \(Int(Self.idleTimeout))s; stopping")
+                shouldStop = true
+            }
         }
         listener.cancel()
     }
@@ -67,7 +77,10 @@ final class XamineAgentTests: XCTestCase {
                 let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
                 let target = head.split(separator: "\r\n").first?.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
                 DispatchQueue.main.async {
+                    // Counted at both ends, so a long request (a wait, a big snapshot) doesn't look like silence.
+                    self.lastContact = Date()
                     let response = self.respond(to: target)
+                    self.lastContact = Date()
                     self.send(response, on: connection)
                 }
             } else if isComplete || error != nil {

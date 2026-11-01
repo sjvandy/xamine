@@ -51,6 +51,15 @@ struct AgentClient: Sendable {
         _ = try? await data("shutdown", timeout: 3)
     }
 
+    /// Asks the agent to end its test and waits up to `timeout` for the reply. For use while the app terminates, when
+    /// there's no run loop left to finish an async request.
+    func shutdownSynchronously(timeout: TimeInterval) {
+        let done = DispatchSemaphore(value: 0)
+        let request = URLRequest(url: baseURL.appending(path: "shutdown"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
+        URLSession.shared.dataTask(with: request) { _, _, _ in done.signal() }.resume()
+        _ = done.wait(timeout: .now() + timeout)
+    }
+
     /// Calls an automation endpoint (`launch`, `resolve`, `tap`, `type`, `swipe`, `key`, `wait`) for an app.
     /// `steps` is a query encoded with `QueryResolver.json`, which the agent evaluates with XCUITest's own query API.
     func automate(_ path: String, bundleID: String, steps: JSONValue? = nil, parameters: [String: String] = [:],

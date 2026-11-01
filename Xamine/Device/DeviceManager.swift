@@ -55,6 +55,7 @@ final class DeviceManager {
     }
 
     @ObservationIgnored private var process: Process?
+    @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var runningDeviceID: String?
 
     var selectedDevice: IOSDevice? { devices.first { $0.id == selectedDeviceID } }
@@ -174,6 +175,7 @@ final class DeviceManager {
             append("Reusing the agent that's already running on \(device.name).")
             client = AgentClient(host: host)
             state = .running
+            startHeartbeat()
             await loadApps()
             return
         }
@@ -196,6 +198,8 @@ final class DeviceManager {
                 if let host = await host(for: device), (try? await AgentClient(host: host).status()) != nil {
                     client = AgentClient(host: host)
                     state = .running
+                    startHeartbeat()
+            startHeartbeat()
                     append("Connected to the agent at \(host).")
                     await loadApps()
                     return
@@ -227,7 +231,40 @@ final class DeviceManager {
         return false
     }
 
+    /// Checks in with the running agent every 10 seconds. The agent stops itself after 30 seconds without hearing from
+    /// Xamine, so a force-quit or crashed Xamine doesn't leave the device in "Automation Running".
+    private func startHeartbeat() {
+        heartbeat?.cancel()
+        heartbeat = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard let self, !Task.isCancelled, state == .running else { return }
+                if let client, (try? await client.status()) != nil { continue }
+                // The tunnel address changes when a device reconnects; find the agent at its new one.
+                if let id = runningDeviceID, let device = devices.first(where: { $0.id == id }), let host = await host(for: device) {
+                    let moved = AgentClient(host: host)
+                    if (try? await moved.status()) != nil { client = moved }
+                }
+            }
+        }
+    }
+
+    /// Ends the agent's test (and the device's "Automation Running" session) as Xamine quits. Blocks for a few seconds
+    /// at most: the agent is asked to stop, then xcodebuild is given a moment to finish before it's terminated.
+    func stopAgentBeforeQuitting() {
+        heartbeat?.cancel()
+        client?.shutdownSynchronously(timeout: 2)
+        if let process {
+            let deadline = Date().addingTimeInterval(3)
+            while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            if process.isRunning { process.terminate() }
+        }
+        process = nil
+        client = nil
+    }
+
     func stopAgent() {
+        heartbeat?.cancel()
         if let client { Task { await client.shutdown() } }
         process?.terminate()
         process = nil
