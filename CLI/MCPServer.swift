@@ -4,7 +4,7 @@ import Foundation
 enum MCPServer {
     static let instructions = """
     Xamine inspects and drives macOS apps through the Accessibility API and turns what you do into XCUITest code.
-    Typical flow: launch_app → snapshot (or find_elements) to get element refs like e12 → click / type_text / press_key \
+    For iPhones, iPads and Simulators, call list_devices and pass device on every call. Typical flow: launch_app → snapshot (or find_elements) to get element refs like e12 → click / type_text / press_key \
     → snapshot again after the UI changes. Each action returns the equivalent XCUITest line. To build a test, call \
     recording_start first and recording_stop at the end to get a complete XCTestCase file. When a UI test can't find \
     an element, pass its query to resolve_query to see what the live UI has instead.

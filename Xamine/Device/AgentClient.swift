@@ -51,6 +51,16 @@ struct AgentClient: Sendable {
         _ = try? await data("shutdown", timeout: 3)
     }
 
+    /// Calls an automation endpoint (`launch`, `resolve`, `tap`, `type`, `swipe`, `key`, `wait`) for an app.
+    /// `steps` is a query encoded with `QueryResolver.json`, which the agent evaluates with XCUITest's own query API.
+    func automate(_ path: String, bundleID: String, steps: JSONValue? = nil, parameters: [String: String] = [:],
+                  timeout: TimeInterval = 60) async throws -> JSONValue {
+        var query = parameters
+        query["bundleId"] = bundleID
+        if let steps { query["steps"] = String(decoding: steps.encoded(), as: UTF8.self) }
+        return try JSONValue.decode(try await data(path, query: query, timeout: timeout))
+    }
+
     // MARK: - Transport
 
     private func get<T: Decodable>(_ path: String, query: [String: String] = [:], timeout: TimeInterval) async throws -> T {
@@ -59,7 +69,13 @@ struct AgentClient: Sendable {
 
     private func data(_ path: String, query: [String: String] = [:], timeout: TimeInterval) async throws -> Data {
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
-        if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        // Encode everything but unreserved characters: `&`, `=` and `+` would otherwise break typed text and JSON steps.
+        let unreserved = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        if !query.isEmpty {
+            components.percentEncodedQueryItems = query.map {
+                URLQueryItem(name: $0.key, value: $0.value.addingPercentEncoding(withAllowedCharacters: unreserved))
+            }
+        }
         var request = URLRequest(url: components.url!, timeoutInterval: timeout)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -100,6 +116,7 @@ struct AgentNode: Decodable, Sendable {
     let type: String
     let frame: [Double]
     let enabled: Bool?
+    let selected: Bool?
     let identifier: String?
     let label: String?
     let title: String?
@@ -125,7 +142,8 @@ struct AgentNode: Decodable, Sendable {
                 value: node.value,
                 placeholder: node.placeholder,
                 frame: frame,
-                isEnabled: node.enabled
+                isEnabled: node.enabled,
+                isSelected: node.selected
             ))
             if let parentID { nodes[parentID].childIDs.append(id) }
             for child in node.children { visit(child, parentID: id, depth: depth + 1) }

@@ -30,9 +30,15 @@ final class AutomationService {
 
     private let permissions: PermissionsManager
     private var snapshots: [String: Snapshot] = [:]
-    private var nextSnapshotID = 1
+    var nextSnapshotID = 1
     private var currentBundleID: String?
-    private var recording: TestComposer?
+    var recording: TestComposer?
+    /// The device a recording belongs to, or `nil` for a Mac app.
+    var recordingDeviceID: String?
+    /// The latest snapshot of each app on each device, keyed by "deviceID/bundleID".
+    var deviceSnapshots: [String: DeviceSnapshot] = [:]
+    /// The app used last on each device.
+    var currentDeviceApps: [String: String] = [:]
 
     init(permissions: PermissionsManager) {
         self.permissions = permissions
@@ -67,6 +73,12 @@ final class AutomationService {
     }
 
     func handle(_ method: String, params: [String: JSONValue]) async throws -> JSONValue {
+        // iPhone, iPad and Simulator calls go to the on-device agent (AutomationService+Device.swift).
+        if method == "list_devices" { return try await listDevices() }
+        if method == "release_device" { return try await releaseDevice(params) }
+        if let device = params["device"]?.string, !device.isEmpty {
+            return try await handleDevice(method, device: device, params: params)
+        }
         switch method {
         case "status": return status()
         case "list_apps": return listApps()
@@ -317,7 +329,7 @@ final class AutomationService {
     }
 
     /// One line per element: `e12 Button id=save "Save" value=… [disabled]`.
-    private func describe(_ node: UINode, frames: Bool = false) -> String {
+    func describe(_ node: UINode, frames: Bool = false) -> String {
         var parts = ["e\(node.id)", node.kind.displayName]
         if let identifier = node.identifier.nonEmpty { parts.append("id=\(identifier)") }
         if let title = node.title.nonEmpty { parts.append("title=\(Self.quote(title))") }
@@ -325,13 +337,14 @@ final class AutomationService {
         if let value = node.value.nonEmpty { parts.append("value=\(Self.quote(String(value.prefix(80))))") }
         if let placeholder = node.placeholder.nonEmpty { parts.append("placeholder=\(Self.quote(placeholder))") }
         if node.isEnabled == false { parts.append("[disabled]") }
+        if node.isSelected == true { parts.append("[selected]") }
         if frames, let frame = node.frame {
             parts.append("@\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
         }
         return parts.joined(separator: " ")
     }
 
-    private static func quote(_ string: String) -> String {
+    static func quote(_ string: String) -> String {
         "\"" + string.replacingOccurrences(of: "\n", with: "⏎") + "\""
     }
 
@@ -383,13 +396,15 @@ final class AutomationService {
             guard let first = resolution.matches.first else {
                 throw Failure(code: "elementNotFound", message: "No element matches \(query). Use resolve_query to see why.")
             }
-            return Target(snapshot: snapshot, nodeID: first, query: Self.trimmed(query))
+            // Xamine acts on the first match; record that explicitly, or the test fails with "multiple matching elements".
+            let recorded = resolution.matches.count > 1 ? Self.trimmed(query) + ".firstMatch" : Self.trimmed(query)
+            return Target(snapshot: snapshot, nodeID: first, query: recorded)
         }
         if required { throw Failure(code: "invalidParams", message: "Pass element (a ref like e12) or query.") }
         return nil
     }
 
-    private func parse(_ query: String) throws -> [QueryResolver.Step] {
+    func parse(_ query: String) throws -> [QueryResolver.Step] {
         do {
             return try QueryResolver.parse(query)
         } catch {
@@ -398,7 +413,7 @@ final class AutomationService {
     }
 
     /// The query part of an expression an agent passed in, without a trailing `.click()` or similar.
-    private static func trimmed(_ query: String) -> String {
+    static func trimmed(_ query: String) -> String {
         guard let steps = try? QueryResolver.parse(query) else { return query }
         return "app" + steps.map(\.source).joined()
     }
@@ -407,15 +422,15 @@ final class AutomationService {
         target.element?.frame ?? target.node.frame
     }
 
-    private func record(_ step: TestComposer.Step, bundleID: String?) -> String {
-        let line = TestComposer.line(for: step)
-        if recording != nil, recording?.bundleID == bundleID {
+    func record(_ step: TestComposer.Step, bundleID: String?, deviceID: String? = nil, platform: TargetPlatform = .macOS) -> String {
+        let line = TestComposer.line(for: step, platform: platform)
+        if recording != nil, recording?.bundleID == bundleID, recordingDeviceID == deviceID {
             recording?.steps.append(step)
         }
         return line
     }
 
-    private func actionResult(_ summary: String, code: String) -> JSONValue {
+    func actionResult(_ summary: String, code: String) -> JSONValue {
         let recorded = recording.map { " (recorded as step \($0.steps.count))" } ?? ""
         return ["text": .string("\(summary)\nXCUITest\(recorded): \(code)"), "code": .string(code)]
     }
@@ -601,7 +616,7 @@ final class AutomationService {
         return ["text": .string("Screenshot of \(described), \(image.width)×\(image.height) px."), "png": .string(png.base64EncodedString())]
     }
 
-    private static func pngData(_ image: CGImage) -> Data? {
+    static func pngData(_ image: CGImage) -> Data? {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, nil)
@@ -636,15 +651,25 @@ final class AutomationService {
         guard let query = params["query"]?.string, !query.isEmpty else { throw Failure(code: "invalidParams", message: "resolve_query needs query.") }
         let steps = try parse(query)
         let snapshot = try await scan(params)
-        let tree = snapshot.tree
+        let resolution = QueryResolver(tree: snapshot.tree).resolve(steps)
+        return resolutionReport(steps: steps, tree: snapshot.tree, searched: "\(header(for: snapshot)) (front window only)",
+                                counts: resolution.counts, matches: resolution.matches)
+    }
+
+    /// The `resolve_query` report: match counts per step, the matches, or, when nothing matches, where the query stops
+    /// matching and what the live UI has instead. `counts` and `matches` come from Xamine's resolver on macOS and from
+    /// XCUITest itself on a device.
+    func resolutionReport(steps: [QueryResolver.Step], tree: UITree, searched: String, counts: [Int], matches: [Int],
+                          source: String? = nil) -> JSONValue {
         let resolver = QueryResolver(tree: tree)
-        let resolution = resolver.resolve(steps)
         let builder = QueryBuilder(tree: tree, includeAppDeclaration: false)
+        let resolution = QueryResolver.Resolution(matches: matches, counts: counts, failedStep: counts.firstIndex(of: 0))
 
         var lines = [
             "Query: app" + steps.map(\.source).joined(),
-            "Searched: \(header(for: snapshot)) (front window only)",
+            "Searched: \(searched)",
         ]
+        if let source { lines.append(source) }
         lines.append("")
         lines.append("Step by step:")
         let width = (steps.map(\.source.count).max() ?? 0) + 2
@@ -656,8 +681,8 @@ final class AutomationService {
         lines.append("")
 
         var candidates: [JSONValue] = []
-        if !resolution.matches.isEmpty {
-            let count = resolution.matches.count
+        if let matchCount = resolution.counts.last, matchCount > 0 {
+            let count = max(matchCount, resolution.matches.count)
             lines.append("Result: \(count) match\(count == 1 ? "" : "es").")
             if count > 1, steps.last.map({ ![.firstMatch, .element].contains($0.operation) && !Self.isBoundBy($0.operation) }) ?? true {
                 lines.append("Note: interacting with this query raises “multiple matching elements”; add .firstMatch or .element(boundBy:).")
@@ -702,14 +727,14 @@ final class AutomationService {
                     elsewhere.forEach(add)
                 }
             }
-            if let first = pool.first, tree.node(first).kind.typeName == "window" {
+            if let first = pool.first, ["window", "navigationBar"].contains(tree.node(first).kind.typeName) {
                 lines.append("")
-                lines.append("Window titles come from the app's navigation title. To check that a title appears without pinning its text: XCTAssertFalse(app.windows.firstMatch.title.isEmpty)")
+                lines.append("Titles come from the screen's navigation title. To check that navigation worked without pinning the title's text, assert an element that only the destination screen has; a “title isn't empty” check passes even if nothing changed.")
             }
         }
         return [
             "text": .string(lines.joined(separator: "\n")),
-            "matchCount": .number(Double(resolution.matches.count)),
+            "matchCount": .number(Double(resolution.counts.last ?? 0)),
             "failedStep": resolution.failedStep.map { .number(Double($0 + 1)) } ?? .null,
             "matches": .array(resolution.matches.prefix(10).map { .string("e\($0)") }),
             "candidates": .array(candidates),
@@ -718,13 +743,13 @@ final class AutomationService {
 
     /// A query that finds the element by type and position only, so copy changes don't break it: from the closest
     /// unique container if there is one, otherwise the full path.
-    private func textFreeQuery(for id: Int, builder: QueryBuilder) -> String {
+    func textFreeQuery(for id: Int, builder: QueryBuilder) -> String {
         let queries = builder.queries(for: id)
         if builder.tree.node(id).kind.typeName == "window" { return "app.windows.firstMatch" }
         return (queries.hasUniqueContainer ? queries.fromContainer : queries.byHierarchy).code.replacingOccurrences(of: "\n    ", with: "")
     }
 
-    private static func isBoundBy(_ operation: QueryResolver.Operation) -> Bool {
+    static func isBoundBy(_ operation: QueryResolver.Operation) -> Bool {
         if case .boundBy = operation { return true }
         return false
     }

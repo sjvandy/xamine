@@ -1,5 +1,7 @@
+import AppKit
 import CoreGraphics
 import Foundation
+import Synchronization
 
 /// One element of a scanned UI hierarchy. Nodes live in a flat array inside `UITree` and refer to each other by index.
 struct UINode: Identifiable, Hashable, Sendable {
@@ -22,6 +24,8 @@ struct UINode: Identifiable, Hashable, Sendable {
     /// Global screen coordinates, top-left origin.
     var frame: CGRect?
     var isEnabled: Bool?
+    /// Selected state from XCUITest (iOS): a chosen segment, tab or row.
+    var isSelected: Bool? = nil
 
     /// The most stable string to look this element up by with XCUITest's subscript or `matching(identifier:)`:
     /// identifier, then title, label, value and placeholder. Long, multi-line or numeric values are skipped, since
@@ -35,7 +39,21 @@ struct UINode: Identifiable, Hashable, Sendable {
     var stableIdentifier: String? {
         guard let identifier = identifier.nonEmpty else { return nil }
         if identifier.hasPrefix("_NS:") || identifier.hasPrefix("SwiftUI.") || identifier.contains("-AppWindow-") { return nil }
+        // An SF Symbol name (`bag`, `cup.and.saucer`) is the icon an element shows, not an identifier anyone set; it
+        // changes with state (`bag.fill`), so the label is the better key.
+        if Self.isSymbolName(identifier) { return nil }
         return identifier
+    }
+
+    private static let symbolNames = Mutex<[String: Bool]>([:])
+
+    /// Whether `name` is an SF Symbol, checked against the system's symbol catalog and remembered.
+    static func isSymbolName(_ name: String) -> Bool {
+        if let known = symbolNames.withLock({ $0[name] }) { return known }
+        let isSymbol = !name.contains(where: \.isUppercase) && !name.contains("-")
+            && NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil
+        symbolNames.withLock { $0[name] = isSymbol }
+        return isSymbol
     }
 
     /// Which identifying property `bestKey` came from, for notes in the UI.

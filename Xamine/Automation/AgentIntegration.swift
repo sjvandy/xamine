@@ -156,12 +156,12 @@ enum AgentIntegration {
     static let skill = #"""
     ---
     name: xamine
-    description: Inspect and drive macOS apps through Xamine to write, record, or repair XCUITest UI tests. Use when the user wants a UI automation or XCUITest for a Mac app, wants to reproduce or verify steps in an app's UI, needs accessibility identifiers or element queries, or has a UI test that fails because an element can't be found or a title or label changed.
+    description: Inspect and drive macOS, iOS and iPadOS apps (on a Mac, a connected iPhone or iPad, or a Simulator) through Xamine to write, record, or repair XCUITest UI tests. Use when the user wants a UI automation or XCUITest for an Apple-platform app, wants to reproduce or verify steps in an app's UI, needs accessibility identifiers or element queries, or has a UI test that fails because an element can't be found or a title or label changed.
     ---
 
-    # Xamine: UI automation for macOS apps
+    # Xamine: UI automation for Apple platforms
 
-    Xamine reads any Mac app's accessibility hierarchy, operates it (clicks, typing, keys), and turns what you do into XCUITest code. Use its MCP tools (`mcp__xamine__*`). If they aren't available, run the same commands with the CLI shown by `status` (`xamine <command> --help`).
+    Xamine reads an app's UI hierarchy, operates it (clicks or taps, typing, keys), and turns what you do into XCUITest code. It works with Mac apps directly, and with apps on a connected iPhone or iPad or a Simulator through a small XCUITest agent it runs there. Use its MCP tools (`mcp__xamine__*`). If they aren't available, run the same commands with the CLI shown by `status` (`xamine <command> --help`).
 
     ## When to use it
     - "Create a UI test / XCUI automation that does X in <app>": explore, record, save the generated test, run it.
@@ -169,7 +169,16 @@ enum AgentIntegration {
     - Finding the right XCUITest query or accessibility identifier for an element.
     - Checking what a Mac app's UI currently shows (`snapshot`, `screenshot`).
 
-    It drives macOS apps only. For iOS it can't click or type.
+    ## iPhone, iPad and Simulator
+    - Call `list_devices` first, then pass `device` (the name or UDID it shows) on **every** call for that device. Without `device`, calls go to the Mac.
+    - The first device call builds and starts Xamine's agent there, which takes a minute or two the first time. A physical device must be unlocked, trusted, with Developer Mode and UI Automation (Settings › Developer) on.
+    - `launch_app` takes a bundle ID or the app's name (`list_apps` with `device` lists installed apps). Pass `relaunch: true` for a fresh start.
+    - Actions run as real XCUITest calls on the device: `click` taps, `scroll` swipes (scrolling down swipes up), `press_key` handles `home`, `return`, `delete` and characters. `resolve_query` counts matches with XCUITest itself.
+    - Recordings produce iOS code (`.tap()`, a tap before `typeText`, `swipeUp()`, `XCUIDevice.shared.press(.home)`). If tapping a switch's row doesn't toggle it, Xamine taps the switch inside and records `….switches.firstMatch.tap()`; keep that.
+    - Lists load lazily: rows below the fold aren't in a snapshot until you `scroll`. If `find_elements` finds nothing, scroll and look again.
+    - iPhone and iPad layouts differ. On iPad (iOS 18+) tabs sit in a floating bar at the top that isn't a `tabBar`, so `app.tabBars.buttons["Cart"]` fails there; `app.buttons["Cart"].firstMatch` works on both. Check tests on each device family they must run on.
+    - Snapshots show `[selected]` for the chosen segment or tab, and screenshots are in pixels (2× or 3× the snapshot's points).
+    - You can run `xcodebuild test` on the device while Xamine's agent is running. If a test run can't start the app or hangs at launch, call `release_device` first; the next call with `device` starts the agent again.
 
     ## Ground rules
     - Xamine moves the real mouse and keyboard. Tell the user not to touch them while you drive, and never drive the UI while `xcodebuild test` is running.

@@ -58,11 +58,14 @@ struct QueryResolver {
 
     let tree: UITree
 
+    /// The node `app` stands for: the root itself when the tree is an XCUITest snapshot of an application (iOS), or
+    /// -1, a virtual application above the scanned window (macOS).
+    private var appID: Int { tree.root?.kind.typeName == "application" ? 0 : -1 }
+
     // MARK: - Evaluation
 
     func resolve(_ steps: [Step]) -> Resolution {
-        // -1 is the application, above the scanned window.
-        var current = [-1]
+        var current = [appID]
         var counts: [Int] = []
         var failedStep: Int?
         for (index, step) in steps.enumerated() {
@@ -75,7 +78,7 @@ struct QueryResolver {
 
     /// The candidates a step chose from: the matches just before it, widened to every element of the step's type.
     func candidates(before index: Int, in steps: [Step]) -> [Int] {
-        let previous = index == 0 ? [-1] : resolve(Array(steps.prefix(index))).matches
+        let previous = index == 0 ? [appID] : resolve(Array(steps.prefix(index))).matches
         switch steps[index].operation {
         case .descendants, .children:
             return previous.flatMap { descendants(of: $0) }
@@ -155,6 +158,27 @@ struct QueryResolver {
         }
     }
 
+    // MARK: - JSON
+
+    /// The steps as sent to the on-device agent, which rebuilds the query from real `XCUIElementQuery` calls.
+    static func json(_ steps: [Step]) -> JSONValue {
+        .array(steps.map { step in
+            switch step.operation {
+            case .descendants(let type): ["op": "descendants", "type": .string(type ?? "any")]
+            case .children(let type): ["op": "children", "type": .string(type ?? "any")]
+            case .key(let key): ["op": "key", "key": .string(key)]
+            case .typedKey(let type, let key): ["op": "typedKey", "type": .string(type), "key": .string(key)]
+            case .containing(let type, let key): ["op": "containing", "type": .string(type ?? "any"), "key": .string(key)]
+            case .predicate(let predicate):
+                ["op": "predicate", "key": .string(predicate.key), "operator": .string(predicate.op.rawValue),
+                 "value": .string(predicate.value), "caseInsensitive": .bool(predicate.caseInsensitive)]
+            case .boundBy(let index): ["op": "boundBy", "index": .number(Double(index))]
+            case .firstMatch: ["op": "firstMatch"]
+            case .element: ["op": "element"]
+            }
+        })
+    }
+
     // MARK: - Similarity
 
     /// How alike two strings are, 0…1: edit distance, with a boost when one contains the other.
@@ -229,25 +253,20 @@ struct QueryResolver {
         /// Moves past `app`, `XCUIApplication()` or `XCUIApplication(bundleIdentifier: …)`, skipping any wrapper.
         private mutating func skipToRoot() throws {
             let text = String(chars)
-            for root in ["XCUIApplication(", "app."] {
-                guard let range = text.range(of: root) else { continue }
-                position = text.distance(from: text.startIndex, to: range.lowerBound)
-                if root == "app." {
-                    position += 3
-                } else {
-                    position += root.count - 1
-                    _ = try argumentList()
-                }
-                return
+            // `XCUIApplication(…)`, or `app` followed by a step; generated queries put each step on its own line.
+            let pattern = #"XCUIApplication\(|\bapp(?=\s*[.\[])"#
+            guard let range = text.range(of: pattern, options: .regularExpression) else {
+                throw ParseError(message: "The query must start from app or XCUIApplication(…).")
             }
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("app[") {
-                position = text.distance(from: text.startIndex, to: text.range(of: "app[")!.lowerBound) + 3
-                return
+            position = text.distance(from: text.startIndex, to: range.lowerBound)
+            if text[range].hasPrefix("XCUIApplication") {
+                position += "XCUIApplication".count
+                _ = try argumentList()
+            } else {
+                position += 3
             }
-            throw ParseError(message: "The query must start from app or XCUIApplication(…).")
         }
 
-        /// The step as written, without whitespace outside string literals (queries are often split across lines).
         private func source(from start: Int) -> String {
             var result = ""
             var quote: Character?

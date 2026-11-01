@@ -9,6 +9,10 @@ struct TestComposer: Sendable {
         case typeKey(key: String, modifiers: [String])
         case assertExists(timeout: Double)
         case assertGone(timeout: Double)
+        /// iOS: a swipe in the finger's direction (`up`, `down`, `left`, `right`).
+        case swipe(String)
+        /// iOS: a hardware button (`home`, `volumeUp`, `volumeDown`), pressed through `XCUIDevice`.
+        case deviceButton(String)
     }
 
     struct Step: Sendable, Equatable {
@@ -19,18 +23,23 @@ struct TestComposer: Sendable {
 
     var name: String
     var bundleID: String
+    /// macOS clicks; iOS taps, and needs a tap to focus a field before typing into it.
+    var platform: TargetPlatform
     var steps: [Step] = []
 
-    init(name: String, bundleID: String) {
+    init(name: String, bundleID: String, platform: TargetPlatform = .macOS) {
         self.name = Self.typeName(from: name)
         self.bundleID = bundleID
+        self.platform = platform
     }
 
     /// The single line of XCUITest code for one step, as returned to the agent after each action.
-    static func line(for step: Step) -> String {
+    static func line(for step: Step, platform: TargetPlatform = .macOS) -> String {
         let target = (step.query ?? "app").replacingOccurrences(of: "\n    ", with: "")
         switch step.action {
-        case .click: return "\(target).click()"
+        case .click: return platform == .macOS ? "\(target).click()" : "\(target).tap()"
+        case .swipe(let direction): return "\(target).swipe\(direction.prefix(1).uppercased() + direction.dropFirst())()"
+        case .deviceButton(let button): return "XCUIDevice.shared.press(.\(button))"
         case .typeText(let text): return "\(target).typeText(\(QueryBuilder.literal(text)))"
         case .typeKey(let key, let modifiers): return "\(target).typeKey(\(key), modifierFlags: \(modifierFlags(modifiers)))"
         case .assertExists(let timeout): return "XCTAssertTrue(\(target).waitForExistence(timeout: \(format(timeout))))"
@@ -49,13 +58,15 @@ struct TestComposer: Sendable {
         var names: [String: String] = [:] // query → variable
         var used = Set(["app"])
 
+        var previous: Step?
         for step in steps {
+            defer { previous = step }
             guard let query = step.query else {
-                body.append(Self.line(for: step))
+                body.append(Self.line(for: step, platform: platform))
                 continue
             }
             switch step.action {
-            case .click, .typeText:
+            case .click, .typeText, .swipe:
                 let variable: String
                 if let existing = names[query] {
                     variable = existing
@@ -66,9 +77,13 @@ struct TestComposer: Sendable {
                     body.append("let \(variable) = \(query)")
                 }
                 body.append("XCTAssertTrue(\(variable).waitForExistence(timeout: 5))")
-                body.append(Self.line(for: Step(query: variable, action: step.action)))
-            case .typeKey, .assertExists, .assertGone:
-                body.append(Self.line(for: Step(query: names[query] ?? query, action: step.action)))
+                // On iOS a field must have keyboard focus before typeText, which a tap gives it.
+                if platform != .macOS, case .typeText = step.action, previous != Step(query: query, action: .click) {
+                    body.append(Self.line(for: Step(query: variable, action: .click), platform: platform))
+                }
+                body.append(Self.line(for: Step(query: variable, action: step.action), platform: platform))
+            case .typeKey, .assertExists, .assertGone, .deviceButton:
+                body.append(Self.line(for: Step(query: names[query] ?? query, action: step.action), platform: platform))
             }
         }
 
