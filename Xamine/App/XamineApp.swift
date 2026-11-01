@@ -58,6 +58,9 @@ private struct MenuContent: View {
             }
         }
 
+        Divider()
+        Button("Set Up AI Agents…") { Task { await AgentIntegration.setUpAll() } }
+
         #if DEBUG
         Divider()
         Toggle("Preview AI Agent Icon", isOn: Bindable(state).isAgentActive)
@@ -79,6 +82,8 @@ private struct MenuContent: View {
 struct SettingsView: View {
     @AppStorage("pickOnLaunch") private var pickOnLaunch = false
 
+    static var helperPath: String { AgentIntegration.helperPath }
+
     var body: some View {
         Form {
             Toggle("Start picking a window when Xamine launches", isOn: $pickOnLaunch)
@@ -86,6 +91,19 @@ struct SettingsView: View {
                 ShortcutRecorderView(title: "Pick a window", action: .inspect, store: ShortcutStore.shared)
                 ShortcutRecorderView(title: "Inspect under cursor", action: .handsOff, store: ShortcutStore.shared)
                 Button("Restore Defaults") { ShortcutStore.shared.resetAll() }
+            }
+            Section {
+                LabeledContent("Claude Code and Claude in Xcode") {
+                    Button("Set Up…") { Task { await AgentIntegration.setUpAll() } }
+                }
+                LabeledContent("Command-line tool") {
+                    Button("Copy Path") { Clipboard.copy(Self.helperPath) }
+                }
+            } header: {
+                Text("AI Agents")
+            } footer: {
+                Text("Set Up adds Xamine's MCP server and a skill that tells the agent when to use it. Agents can then inspect and operate Mac apps and write XCUITests.")
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
