@@ -45,7 +45,7 @@ enum DebugDump {
             let target = atPoint.map {
                 PickedWindow(pid: 0, windowID: 0, bounds: CGRect(origin: .zero, size: CGSize(width: 1, height: 1)),
                              appName: "?", layer: 1, anchor: $0)
-            } ?? frontWindow(of: bundleID)
+            } ?? WindowLocator.frontWindow(of: bundleID)
             if let target {
                 do {
                     let start = Date()
@@ -70,18 +70,6 @@ enum DebugDump {
             NSApp.terminate(nil)
         }
         return true
-    }
-
-    private static func frontWindow(of bundleID: String) -> PickedWindow? {
-        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
-              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
-              let info = list.first(where: { ($0[kCGWindowOwnerPID as String] as? pid_t) == app.processIdentifier && ($0[kCGWindowLayer as String] as? Int) == 0 }),
-              let id = info[kCGWindowNumber as String] as? CGWindowID,
-              let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
-              let bounds = CGRect(dictionaryRepresentation: boundsDict)
-        else { return nil }
-        return PickedWindow(pid: app.processIdentifier, windowID: id, bounds: bounds, appName: app.localizedName ?? bundleID,
-                            bundleID: bundleID, title: info[kCGWindowName as String] as? String)
     }
 }
 #endif

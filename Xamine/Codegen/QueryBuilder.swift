@@ -65,6 +65,20 @@ struct QueryBuilder {
         )
     }
 
+    /// The query to put in a generated test: by identifier, else anchored, else from a unique container, else the full
+    /// path. Each is checked with `QueryResolver`, and the first that finds exactly this element wins.
+    func bestQuery(for id: Int) -> String {
+        let plain = QueryBuilder(tree: tree, includeAppDeclaration: false)
+        let generated = plain.queries(for: id)
+        let options = [generated.byIdentifier, generated.fromAnchor, generated.hasUniqueContainer ? generated.fromContainer : nil, generated.byHierarchy]
+            .compactMap { $0?.code }
+        let resolver = QueryResolver(tree: tree)
+        return options.first { code in
+            guard let steps = try? QueryResolver.parse(code) else { return false }
+            return resolver.resolve(steps).matches == [id]
+        } ?? generated.byHierarchy.code
+    }
+
     // MARK: - App declaration
 
     var appDeclaration: String {
@@ -137,7 +151,7 @@ struct QueryBuilder {
 
             let onPath = steps.first?.id
             for sibling in tree.children(of: container.id) where sibling.id != onPath {
-                guard let key = sibling.identifier.nonEmpty, keyMatches(kind: sibling.kind, key: key).count == 1 else { continue }
+                guard let key = sibling.stableIdentifier, keyMatches(kind: sibling.kind, key: key).count == 1 else { continue }
                 // Every container of this type that holds that element somewhere below it, in document order.
                 let holders = nodesInScope { $0.kind.typeName == container.kind.typeName && contains($0.id, kind: sibling.kind, identifier: key) }
                 let index = holders.firstIndex(of: container.id) ?? 0

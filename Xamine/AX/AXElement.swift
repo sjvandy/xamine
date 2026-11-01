@@ -22,7 +22,7 @@ struct AXElement {
         kAXIdentifierAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
         kAXValueAttribute, kAXPlaceholderValueAttribute, kAXHelpAttribute,
         kAXPositionAttribute, kAXSizeAttribute, kAXEnabledAttribute,
-        kAXChildrenAttribute,
+        kAXChildrenAttribute, "AXAutomationType",
     ]
 
     /// Reads `names` in a single IPC round trip. Missing attributes come back as `nil`.

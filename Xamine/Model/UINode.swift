@@ -27,12 +27,20 @@ struct UINode: Identifiable, Hashable, Sendable {
     /// identifier, then title, label, value and placeholder. Long, multi-line or numeric values are skipped, since
     /// they're content or state rather than something to find an element by.
     var bestKey: String? {
-        identifier.nonEmpty ?? title.nonEmpty ?? label.nonEmpty ?? keyableValue ?? placeholder.nonEmpty
+        stableIdentifier ?? title.nonEmpty ?? label.nonEmpty ?? keyableValue ?? placeholder.nonEmpty
+    }
+
+    /// The identifier, unless the framework made it up: AppKit's `_NS:74` and SwiftUI's
+    /// `SwiftUI.WindowGroup<…>-1-AppWindow-1` change between builds, so they make poor keys for a test.
+    var stableIdentifier: String? {
+        guard let identifier = identifier.nonEmpty else { return nil }
+        if identifier.hasPrefix("_NS:") || identifier.hasPrefix("SwiftUI.") || identifier.contains("-AppWindow-") { return nil }
+        return identifier
     }
 
     /// Which identifying property `bestKey` came from, for notes in the UI.
     var bestKeySource: String? {
-        if identifier.nonEmpty != nil { return "identifier" }
+        if stableIdentifier != nil { return "identifier" }
         if title.nonEmpty != nil { return "title" }
         if label.nonEmpty != nil { return "label" }
         if keyableValue != nil { return "value" }

@@ -44,12 +44,24 @@ enum ScanError: LocalizedError {
     }
 }
 
+/// The accessibility elements behind a scanned tree, indexed by node id. `AXUIElement` is a thread-safe CF type.
+struct ScannedElements: @unchecked Sendable {
+    let raw: [AXUIElement]
+
+    subscript(id: Int) -> AXElement? { raw.indices.contains(id) ? AXElement(raw: raw[id]) : nil }
+}
+
 /// Walks an app window's accessibility tree into a `UITree`.
 enum HierarchyScanner {
     static let maxDepth = 80
     static let maxNodes = 15_000
 
     static func scan(_ target: PickedWindow) async throws -> UITree {
+        try await scanWithElements(target).tree
+    }
+
+    /// Like `scan`, plus the live accessibility element behind each node (indexed by node id), so it can be acted on.
+    static func scanWithElements(_ target: PickedWindow) async throws -> (tree: UITree, elements: ScannedElements) {
         var result = try await pass(target, enhanced: false)
 
         // Web views (WebKit, Chromium, Electron) build their accessibility tree lazily, the first time an
@@ -63,11 +75,11 @@ enum HierarchyScanner {
             if retries > 1, result.nodes.count == previousCount { break }
         }
         Log.scan.notice("scanned \(result.nodes.count) nodes from pid \(result.pid) after \(retries) retries")
-        return makeTree(result.nodes, pid: result.pid, for: target)
+        return (makeTree(result.nodes, pid: result.pid, for: target), result.elements)
     }
 
     /// One walk of the window, off the main actor. Returns the nodes and the pid that actually owns them.
-    private static func pass(_ target: PickedWindow, enhanced: Bool) async throws -> (nodes: [UINode], pid: pid_t) {
+    private static func pass(_ target: PickedWindow, enhanced: Bool) async throws -> (nodes: [UINode], elements: ScannedElements, pid: pid_t) {
         try await Task.detached(priority: .userInitiated) {
             guard AXIsProcessTrusted() else { throw ScanError.notTrusted }
             let (root, pid) = try findRoot(for: target)
@@ -81,9 +93,11 @@ enum HierarchyScanner {
             defer { if enhanced { app.set("AXEnhancedUserInterface", previousEnhanced ?? false) } }
 
             var nodes: [UINode] = []
+            var elements: [AXUIElement] = []
             nodes.reserveCapacity(1024)
-            visit(root, parentID: nil, depth: 0, into: &nodes)
-            return (nodes, pid)
+            elements.reserveCapacity(1024)
+            visit(root, parentID: nil, depth: 0, into: &nodes, elements: &elements)
+            return (nodes, ScannedElements(raw: elements), pid)
         }.value
     }
 
@@ -147,7 +161,7 @@ enum HierarchyScanner {
             + abs(frame.width - bounds.width) + abs(frame.height - bounds.height)
     }
 
-    private static func visit(_ element: AXElement, parentID: Int?, depth: Int, into nodes: inout [UINode]) {
+    private static func visit(_ element: AXElement, parentID: Int?, depth: Int, into nodes: inout [UINode], elements: inout [AXUIElement]) {
         guard nodes.count < maxNodes else { return }
         let attrs = element.values(AXElement.scanAttributes)
         let role = attrs[kAXRoleAttribute] as? String ?? "AXUnknown"
@@ -158,7 +172,7 @@ enum HierarchyScanner {
             id: id,
             parentID: parentID,
             depth: depth,
-            kind: ElementKind.forRole(role, subrole: subrole),
+            kind: kind(role: role, subrole: subrole, automationType: (attrs["AXAutomationType"] as? NSNumber)?.intValue),
             role: role,
             subrole: subrole,
             roleDescription: attrs[kAXRoleDescriptionAttribute] as? String,
@@ -171,13 +185,22 @@ enum HierarchyScanner {
             frame: AXElement.frame(from: attrs),
             isEnabled: (attrs[kAXEnabledAttribute] as? NSNumber)?.boolValue
         ))
+        elements.append(element.raw)
         if let parentID { nodes[parentID].childIDs.append(id) }
 
         guard depth < maxDepth, let children = attrs[kAXChildrenAttribute] as? [AXUIElement] else { return }
         for child in children {
             AXUIElementSetMessagingTimeout(child, 1.0)
-            visit(AXElement(raw: child), parentID: id, depth: depth + 1, into: &nodes)
+            visit(AXElement(raw: child), parentID: id, depth: depth + 1, into: &nodes, elements: &elements)
         }
+    }
+
+    /// The element's XCUITest kind from its role. Elements with no usable role (SwiftUI's `NavigationLink` rows report
+    /// `AXUnknown`) fall back to the automation type XCUITest itself uses, so generated queries match its element types.
+    static func kind(role: String, subrole: String?, automationType: Int?) -> ElementKind {
+        let byRole = ElementKind.forRole(role, subrole: subrole)
+        guard byRole == .other, let automationType, let byType = ElementKind.forAutomationType(automationType) else { return byRole }
+        return byType
     }
 
     /// In a Simulator window, the iOS app's elements live under the largest group inside the window.

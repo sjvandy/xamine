@@ -42,6 +42,37 @@ struct ElementKind: Hashable, Sendable {
         all.first { $0.typeName == typeName } ?? .other
     }
 
+    /// Maps the `AXAutomationType` attribute, an `XCUIElement.ElementType` raw value that XCUITest reads, to its kind.
+    /// SwiftUI sets it on elements that have no meaningful `AXRole`, such as a `NavigationLink` row in a `List`.
+    static func forAutomationType(_ rawValue: Int) -> ElementKind? {
+        guard automationTypeNames.indices.contains(rawValue), rawValue > 1 else { return nil } // 0 any, 1 other
+        return knownTypeName(automationTypeNames[rawValue])
+    }
+
+    /// `XCUIElement.ElementType` case names, indexed by raw value.
+    private static let automationTypeNames = [
+        "any", "other", "application", "group", "window", "sheet", "drawer", "alert", "dialog", "button",
+        "radioButton", "radioGroup", "checkBox", "disclosureTriangle", "popUpButton", "comboBox", "menuButton",
+        "toolbarButton", "popover", "keyboard", "key", "navigationBar", "tabBar", "tabGroup", "toolbar", "statusBar",
+        "table", "tableRow", "tableColumn", "outline", "outlineRow", "browser", "collectionView", "slider",
+        "pageIndicator", "progressIndicator", "activityIndicator", "segmentedControl", "picker", "pickerWheel",
+        "switch", "toggle", "link", "image", "icon", "searchField", "scrollView", "scrollBar", "staticText",
+        "textField", "secureTextField", "datePicker", "textView", "menu", "menuItem", "menuBar", "menuBarItem", "map",
+        "webView", "incrementArrow", "decrementArrow", "timeline", "ratingIndicator", "valueIndicator", "splitGroup",
+        "splitter", "relevanceIndicator", "colorWell", "helpTag", "matte", "dockItem", "ruler", "rulerMarker", "grid",
+        "levelIndicator", "cell", "layoutArea", "layoutItem", "handle", "stepper", "tab", "touchBar", "statusItem",
+    ]
+
+    /// The kind for a query property such as `buttons`, or `nil` if it isn't an element query.
+    static func forQueryName(_ queryName: String) -> ElementKind? {
+        queryName == other.queryName ? other : all.first { $0.queryName == queryName }
+    }
+
+    /// The kind for an element type name such as `button`, or `nil` if it isn't one.
+    static func knownTypeName(_ typeName: String) -> ElementKind? {
+        typeName == other.typeName ? other : all.first { $0.typeName == typeName }
+    }
+
     private static func k(_ type: String, _ query: String, _ display: String, _ symbol: String, _ category: Category) -> ElementKind {
         ElementKind(typeName: type, queryName: query, displayName: display, symbol: symbol, category: category)
     }
