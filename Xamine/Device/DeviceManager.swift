@@ -79,7 +79,9 @@ final class DeviceManager {
         defer { isRefreshing = false }
         do {
             let json = try await Self.devicectl(["list", "devices"])
-            devices = Self.parseDevices(json)
+            // devicectl doesn't describe Simulators usefully (no platform, different identifiers), so they come from simctl.
+            let simulators = await Task.detached { Self.simulators() }.value
+            devices = Self.parseDevices(json).filter { !$0.isSimulator } + simulators
             if selectedDevice == nil {
                 selectedDeviceID = (devices.first { !$0.isSimulator && $0.isConnected } ?? devices.first { !$0.isSimulator } ?? devices.first)?.id
             }
@@ -111,6 +113,10 @@ final class DeviceManager {
 
     func loadApps() async {
         guard let device = selectedDevice else { return }
+        if device.isSimulator {
+            apps = await Task.detached { Self.simulatorApps(udid: device.udid) }.value
+            return
+        }
         do {
             let json = try await Self.devicectl(["device", "info", "apps", "--device", device.id, "--include-default-apps"])
             apps = Self.parseApps(json)
@@ -390,6 +396,60 @@ final class DeviceManager {
             process.terminationHandler = { _ in continuation.resume() }
             do { try process.run() } catch { continuation.resume(throwing: error) }
         }
+    }
+
+    /// Apps installed on a Simulator (it must be booted). `simctl listapps` prints an old-style plist.
+    nonisolated static func simulatorApps(udid: String) -> [DeviceApp] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["simctl", "listapps", udid]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard let list = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: [String: Any]] else { return [] }
+        return list.compactMap { bundleID, info -> DeviceApp? in
+            guard !bundleID.contains("xctrunner"), !bundleID.hasPrefix("com.xamine.agent") else { return nil }
+            let name = info["CFBundleDisplayName"] as? String ?? info["CFBundleName"] as? String ?? bundleID
+            return DeviceApp(bundleID: bundleID, name: name, isApple: bundleID.hasPrefix("com.apple."))
+        }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Booted iOS Simulators, plus every available one on the newest iOS runtime; `xcodebuild` boots one when needed.
+    nonisolated static func simulators() -> [IOSDevice] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["simctl", "list", "devices", "available", "-j"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let runtimes = json["devices"] as? [String: [[String: Any]]] else { return [] }
+
+        // Runtime keys look like com.apple.CoreSimulator.SimRuntime.iOS-27-2, or iOS-27-2-iPhone19-4 for a runtime
+        // made for one device; the version is the leading numbers.
+        let iOS = runtimes.compactMap { key, list -> (version: String, list: [[String: Any]])? in
+            guard let range = key.range(of: "SimRuntime.iOS-") else { return nil }
+            let numbers = key[range.upperBound...].split(separator: "-").prefix { Int($0) != nil }
+            return (numbers.joined(separator: "."), list)
+        }
+        let newest = iOS.map(\.version).max { $0.compare($1, options: .numeric) == .orderedAscending }
+        return iOS.flatMap { runtime in
+            runtime.list.compactMap { entry -> IOSDevice? in
+                guard let udid = entry["udid"] as? String, let name = entry["name"] as? String else { return nil }
+                let booted = entry["state"] as? String == "Booted"
+                guard booted || runtime.version == newest else { return nil }
+                return IOSDevice(id: udid, udid: udid, name: name, osVersion: runtime.version, isSimulator: true,
+                                 isPad: name.hasPrefix("iPad"), isConnected: true, developerModeEnabled: nil)
+            }
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private static func parseDevices(_ json: [String: Any]) -> [IOSDevice] {
