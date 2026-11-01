@@ -39,8 +39,17 @@ struct GeneratedQueries: Equatable, Sendable {
 /// Turns a node in a `UITree` into XCUITest queries.
 struct QueryBuilder {
     let tree: UITree
-    var action: SnippetAction = .none
-    var includeAppDeclaration: Bool = true
+    var action: SnippetAction
+    var includeAppDeclaration: Bool
+    /// The query root and its descendants, in document order; worked out once instead of on every lookup.
+    private let scopedIDs: [Int]
+
+    init(tree: UITree, action: SnippetAction = .none, includeAppDeclaration: Bool = true) {
+        self.tree = tree
+        self.action = action
+        self.includeAppDeclaration = includeAppDeclaration
+        scopedIDs = tree.nodes.map(\.id).filter(tree.isInQueryScope)
+    }
 
     func queries(for id: Int) -> GeneratedQueries {
         let container = containerSnippet(for: id)
@@ -150,7 +159,7 @@ struct QueryBuilder {
     }
 
     private func nodesInScope(where predicate: (UINode) -> Bool) -> [Int] {
-        tree.nodes.filter { tree.isInQueryScope($0.id) && predicate($0) }.map(\.id)
+        scopedIDs.filter { predicate(tree.node($0)) }
     }
 
     /// Nodes of `kind` that XCUITest's identifier matching would return for `key`.

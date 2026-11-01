@@ -18,6 +18,18 @@ final class InspectorModel {
     private(set) var tree: UITree?
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+
+    /// A device picked from the edge of the screen whose agent is still starting; the inspector shows a loading screen.
+    struct DeviceLaunch: Equatable {
+        let deviceID: String
+        let deviceName: String
+        let symbol: String
+    }
+
+    private(set) var deviceLaunch: DeviceLaunch?
+    /// Returns a working client when a device scan can't reach the agent, or `nil` after starting it over.
+    @ObservationIgnored var recoverDevice: ((DeviceInspection) async -> AgentClient?)?
+
     struct Toast: Equatable {
         let message: String
         let symbol: String
@@ -48,7 +60,26 @@ final class InspectorModel {
 
     // MARK: - Loading
 
+    /// Clears what's shown and waits for a device's agent; `loadDevice` (or picking a window) ends the wait.
+    func beginDeviceLaunch(_ launch: DeviceLaunch) {
+        deviceLaunch = launch
+        target = nil
+        device = nil
+        deviceBundleID = nil
+        image = nil
+        tree = nil
+        errorMessage = nil
+        selectedID = nil
+        hoveredID = nil
+        searchText = ""
+    }
+
+    func cancelDeviceLaunch() {
+        deviceLaunch = nil
+    }
+
     func load(_ target: PickedWindow) async {
+        deviceLaunch = nil
         self.target = target
         device = nil
         selectedID = nil
@@ -58,6 +89,7 @@ final class InspectorModel {
     }
 
     func loadDevice(_ device: DeviceInspection) async {
+        deviceLaunch = nil
         self.device = device
         target = nil
         deviceBundleID = nil
@@ -119,7 +151,7 @@ final class InspectorModel {
         }
     }
 
-    private func rescanDevice(_ device: DeviceInspection, resetExpansion: Bool) async {
+    private func rescanDevice(_ device: DeviceInspection, resetExpansion: Bool, isRetry: Bool = false) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -144,6 +176,17 @@ final class InspectorModel {
             if let selectedID, selectedID >= tree.nodes.count { self.selectedID = nil }
         } catch {
             Log.scan.error("device scan failed: \(error.localizedDescription, privacy: .public)")
+            if !isRetry, Self.isUnreachable(error) {
+                isLoading = false
+                if let client = await recoverDevice?(device) {
+                    var device = device
+                    device.client = client
+                    self.device = device
+                    await rescanDevice(device, resetExpansion: resetExpansion, isRetry: true)
+                }
+                // Otherwise the agent is starting over behind the loading screen.
+                return
+            }
             if !resetExpansion, tree != nil {
                 showToast("Couldn't reach the agent — is it still running?", symbol: "exclamationmark.triangle.fill")
                 return
@@ -151,6 +194,11 @@ final class InspectorModel {
             tree = nil
             errorMessage = error.localizedDescription
         }
+    }
+
+    private static func isUnreachable(_ error: Error) -> Bool {
+        guard let error = error as? URLError else { return false }
+        return [.cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .timedOut, .notConnectedToInternet].contains(error.code)
     }
 
     /// Name, bundle ID and icon for the title chip.
@@ -164,7 +212,7 @@ final class InspectorModel {
     var summary: Summary? {
         if let device {
             return Summary(name: tree?.appName ?? device.deviceName, bundleID: deviceBundleID,
-                           icon: NSImage(systemSymbolName: "iphone", accessibilityDescription: nil), detail: device.deviceName)
+                           icon: NSImage(systemSymbolName: device.symbol, accessibilityDescription: nil), detail: device.deviceName)
         }
         if let target {
             return Summary(name: target.appName, bundleID: target.bundleID,
@@ -258,7 +306,7 @@ final class InspectorModel {
         let stack = tree.hitStack(point)
         if stack == hoverStack, let hoveredID, stack.contains(hoveredID) { return }
         hoverStack = stack
-        hoveredID = stack.last
+        hoveredID = tree.preferredLayer(in: stack)
     }
 
     /// Moves the hover one layer out (`-1`, toward the window) or in (`+1`, toward the deepest element).

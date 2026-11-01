@@ -93,7 +93,9 @@ final class XamineAgentTests: XCTestCase {
             let app = XCUIApplication(bundleIdentifier: bundleID)
             do {
                 let snapshot = try app.snapshot()
-                return json(["bundleId": bundleID, "root": encode(snapshot)])
+                var root = encode(snapshot)
+                Self.rotatePortraitWindows(&root, appFrame: snapshot.frame)
+                return json(["bundleId": bundleID, "root": root])
             } catch {
                 return json(["error": "Couldn't read \(bundleID): \(error.localizedDescription)"], status: "500 Internal Server Error")
             }
@@ -104,7 +106,7 @@ final class XamineAgentTests: XCTestCase {
             return json(["bundleId": foreground ?? "com.apple.springboard"])
 
         case "/screenshot":
-            return Response(contentType: "image/png", body: XCUIScreen.main.screenshot().pngRepresentation)
+            return Response(contentType: "image/png", body: Self.uprightPNG(XCUIScreen.main.screenshot().image))
 
         case "/shutdown":
             shouldStop = true
@@ -113,6 +115,52 @@ final class XamineAgentTests: XCTestCase {
         default:
             return json(["error": "Unknown path \(target)"], status: "404 Not Found")
         }
+    }
+
+    // MARK: - Screenshot
+
+    /// The screenshot as PNG in interface orientation. In landscape the screenshot holds the screen's portrait pixels
+    /// plus an orientation flag, which `pngRepresentation` drops, so redraw it upright to match the snapshot's frames.
+    private static func uprightPNG(_ image: UIImage) -> Data {
+        guard image.imageOrientation != .up else { return image.pngData() ?? Data() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).pngData { _ in image.draw(at: .zero) }
+    }
+
+    // MARK: - Orientation
+
+    /// In landscape, SpringBoard's windows report frames in the screen's portrait space while the app itself reports
+    /// landscape. Rotates those windows into the app's space so they line up with the upright screenshot.
+    private static func rotatePortraitWindows(_ root: inout [String: Any], appFrame: CGRect) {
+        guard appFrame.width > appFrame.height, var windows = root["children"] as? [[String: Any]] else { return }
+        let portrait = CGSize(width: appFrame.height, height: appFrame.width)
+        let isPortrait: ([String: Any]) -> Bool = { frame(of: $0)?.size == portrait }
+        guard windows.contains(where: isPortrait) else { return }
+        // The screenshot's orientation says which way the screen is turned; the device's own orientation can be face up.
+        let clockwise = XCUIScreen.main.screenshot().image.imageOrientation == .right
+        for index in windows.indices where isPortrait(windows[index]) {
+            rotate(&windows[index], portrait: portrait, clockwise: clockwise)
+        }
+        root["children"] = windows
+    }
+
+    private static func rotate(_ node: inout [String: Any], portrait: CGSize, clockwise: Bool) {
+        if let rect = frame(of: node) {
+            let rotated = clockwise
+                ? CGRect(x: portrait.height - rect.maxY, y: rect.minX, width: rect.height, height: rect.width)
+                : CGRect(x: rect.minY, y: portrait.width - rect.maxX, width: rect.height, height: rect.width)
+            node["frame"] = [rotated.minX, rotated.minY, rotated.width, rotated.height]
+        }
+        if var children = node["children"] as? [[String: Any]] {
+            for index in children.indices { rotate(&children[index], portrait: portrait, clockwise: clockwise) }
+            node["children"] = children
+        }
+    }
+
+    private static func frame(of node: [String: Any]) -> CGRect? {
+        guard let values = node["frame"] as? [CGFloat], values.count == 4 else { return nil }
+        return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
     }
 
     // MARK: - Snapshot encoding

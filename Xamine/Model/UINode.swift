@@ -113,6 +113,15 @@ struct UITree: Sendable {
             .map(\.id)
     }
 
+    /// The layer to pick by default from a `hitStack`: the deepest one, unless layers just above it share its exact
+    /// frame and one of those has an identifier or label (a cell wrapping an unlabeled view, say), which queries better.
+    func preferredLayer(in stack: [Int]) -> Int? {
+        guard let deepest = stack.last else { return nil }
+        let frame = nodes[deepest].frame
+        let sameFrame = stack.reversed().prefix { nodes[$0].frame == frame }
+        return sameFrame.first { nodes[$0].hasSelector } ?? deepest
+    }
+
     /// The deepest node whose frame contains `point` (global coordinates), preferring the smallest area on ties.
     func hitTest(_ point: CGPoint) -> UINode? {
         var best: UINode?

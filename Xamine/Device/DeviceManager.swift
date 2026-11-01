@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import IOKit
 import Security
 
 struct IOSDevice: Identifiable, Hashable, Sendable {
@@ -10,9 +11,12 @@ struct IOSDevice: Identifiable, Hashable, Sendable {
     let name: String
     let osVersion: String
     let isSimulator: Bool
+    let isPad: Bool
     /// Wired or network connection to a physical device is up (always true for a booted simulator).
     let isConnected: Bool
     let developerModeEnabled: Bool?
+
+    var symbol: String { isPad ? "ipad" : "iphone" }
 
     var summary: String {
         let kind = isSimulator ? "Simulator" : (isConnected ? "Connected" : "Not connected")
@@ -54,6 +58,10 @@ final class DeviceManager {
     @ObservationIgnored private var runningDeviceID: String?
 
     var selectedDevice: IOSDevice? { devices.first { $0.id == selectedDeviceID } }
+    /// iPhones and iPads reachable right now, by cable or Wi-Fi; simulators are inspected through their Mac window instead.
+    var connectedDevices: [IOSDevice] { devices.filter { !$0.isSimulator && $0.isConnected } }
+    /// Called after each refresh of `devices`.
+    @ObservationIgnored var devicesChanged: (() -> Void)?
     var isAgentRunning: Bool { state == .running && runningDeviceID == selectedDeviceID }
 
     /// Apple apps worth checking first when detecting the foreground app, ahead of the full installed list.
@@ -78,6 +86,27 @@ final class DeviceManager {
         } catch {
             append("Couldn't list devices: \(error.localizedDescription)")
         }
+        devicesChanged?()
+    }
+
+    @ObservationIgnored private var usbWatcher: AppleUSBWatcher?
+    @ObservationIgnored private var usbRefresh: Task<Void, Never>?
+
+    /// Keeps `devices` current as iPhones and iPads are plugged in and unplugged.
+    func watchForDevices() {
+        usbWatcher = AppleUSBWatcher { [weak self] in
+            guard let self else { return }
+            // CoreDevice takes a moment to notice, so look again a little later as well.
+            usbRefresh?.cancel()
+            usbRefresh = Task {
+                for delay in [1.0, 3.0] {
+                    try? await Task.sleep(for: .seconds(delay))
+                    guard !Task.isCancelled else { return }
+                    await self.refreshDevices()
+                }
+            }
+        }
+        Task { await refreshDevices() }
     }
 
     func loadApps() async {
@@ -104,7 +133,20 @@ final class DeviceManager {
 
     // MARK: - Agent
 
+    @ObservationIgnored private var startTask: Task<Void, Never>?
+    @ObservationIgnored private var automaticRestarts: [Date] = []
+
+    /// Builds, installs and connects to the agent. While a start for this device is already underway, waits for that one
+    /// instead of starting over.
     func startAgent() async {
+        if let startTask, case .starting = state, runningDeviceID == selectedDeviceID {
+            await startTask.value
+            return
+        }
+        await performStartTracked()
+    }
+
+    private func performStart() async {
         guard let device = selectedDevice else { return }
         stopAgent()
         log = []
@@ -160,6 +202,25 @@ final class DeviceManager {
         }
     }
 
+    /// Checks the running agent still answers, at the device's current address: the tunnel's address changes when
+    /// the device reconnects, and the agent can stop on the device while xcodebuild keeps running.
+    /// `wait` covers the agent relaunching itself after its test failed (see `-retry-tests-on-failure`).
+    func reconnect(wait: Duration = .zero) async -> Bool {
+        let deadline = ContinuousClock.now + wait
+        while isAgentRunning, let device = selectedDevice {
+            if let host = await host(for: device) {
+                let client = AgentClient(host: host)
+                if (try? await client.status()) != nil {
+                    self.client = client
+                    return true
+                }
+            }
+            guard ContinuousClock.now < deadline else { break }
+            try? await Task.sleep(for: .seconds(1))
+        }
+        return false
+    }
+
     func stopAgent() {
         if let client { Task { await client.shutdown() } }
         process?.terminate()
@@ -184,11 +245,17 @@ final class DeviceManager {
             "-scheme", "XamineAgent",
             "-destination", "id=\(device.udid)",
             "-derivedDataPath", Self.supportDirectory.appending(path: "AgentDerivedData").path,
+            // The agent's test ends if an XCUITest call fails hard (say, a screenshot while the device is locked);
+            // relaunch it rather than leave Xamine talking to nothing. `/shutdown` passes, so it isn't retried.
+            "-retry-tests-on-failure",
+            "-test-iterations", "100",
         ]
         if !device.isSimulator {
             let team = teamID.trimmingCharacters(in: .whitespaces)
             arguments += [
                 "-allowProvisioningUpdates",
+                // Without this, xcodebuild can't make a profile for a device the team hasn't seen yet.
+                "-allowProvisioningDeviceRegistration",
                 "DEVELOPMENT_TEAM=\(team)",
                 // Bundle IDs must be unique to the signing team.
                 "AGENT_BUNDLE_PREFIX=com.xamine.agent.\(team.lowercased())",
@@ -208,25 +275,43 @@ final class DeviceManager {
         }
         process.terminationHandler = { [weak self] finished in
             let status = finished.terminationStatus
-            Task { @MainActor in self?.agentExited(status: status) }
+            let id = ObjectIdentifier(finished)
+            Task { @MainActor in self?.agentExited(id, status: status) }
         }
         append("$ xcodebuild \(arguments.joined(separator: " "))")
         try process.run()
         self.process = process
     }
 
-    private func agentExited(status: Int32) {
+    private func agentExited(_ id: ObjectIdentifier, status: Int32) {
+        // An xcodebuild that was stopped on purpose, perhaps for a newer start, has nothing to report.
+        guard let process, ObjectIdentifier(process) == id else { return }
         append("xcodebuild exited with status \(status).")
-        process = nil
+        self.process = nil
         switch state {
         case .running:
             client = nil
-            state = .failed("The agent stopped. Start it again to keep inspecting.")
+            // The agent's test ends if an XCUITest call fails hard, say a screenshot while the device is locked.
+            // Start it again, but give up after a few tries rather than loop on a device that can't run it.
+            automaticRestarts = automaticRestarts.filter { $0.timeIntervalSinceNow > -120 } + [Date()]
+            if automaticRestarts.count <= 3 {
+                append("Restarting the agent.")
+                state = .starting("Restarting the agent…")
+                Task { await performStartTracked() }
+            } else {
+                state = .failed("The agent keeps stopping. Make sure the device is unlocked, then try again.")
+            }
         case .starting:
             state = .failed(failureSummary())
         default:
             break
         }
+    }
+
+    private func performStartTracked() async {
+        let task = Task { await performStart() }
+        startTask = task
+        await task.value
     }
 
     /// The most useful lines of a failed build or launch.
@@ -236,8 +321,11 @@ final class DeviceManager {
             ("UI Automation", "Turn on UI Automation on the device: Settings ▸ Developer ▸ Enable UI Automation."),
             ("not been explicitly trusted", "Trust your developer certificate on the device: Settings ▸ General ▸ VPN & Device Management."),
             ("No Account for Team", "Sign in to Xcode with the account for this team (Xcode ▸ Settings ▸ Accounts)."),
-            ("No profiles for", "Xcode couldn't create a provisioning profile. Check the Team ID and that you're signed in to Xcode."),
+            ("isn't registered in your developer account", "Xcode couldn't register this device with your team. Check the Team ID and that you're signed in to Xcode with an account that can add devices."),
+            (".mobileprovision'. Did you forget","Xcode just downloaded a new provisioning profile. Start the agent again."),
+            ("No profiles for","Xcode couldn't create a provisioning profile. Check the Team ID and that you're signed in to Xcode."),
             ("is locked", "Unlock the device and try again."),
+            ("Timed out while enabling automation mode", "Unlock the device and try again."),
             ("Unable to find a destination", "xcodebuild can't see this device. Check it's unlocked, trusted, and that this Xcode supports its iOS version."),
         ]
         let text = log.joined(separator: "\n")
@@ -319,6 +407,7 @@ final class DeviceManager {
                 name: properties["name"] as? String ?? "iOS Device",
                 osVersion: properties["osVersionNumber"] as? String ?? "?",
                 isSimulator: isSimulator,
+                isPad: (hardware["deviceType"] as? String) == "iPad",
                 isConnected: isSimulator || tunnel == "connected" || (connection["transportType"] as? String) == "wired",
                 developerModeEnabled: (properties["developerModeStatus"] as? String).map { $0 == "enabled" }
             )
@@ -359,5 +448,49 @@ final class DeviceManager {
             }
         }
         return nil
+    }
+}
+
+/// Calls `onChange` when an Apple USB device, such as an iPhone or iPad, is plugged in or unplugged.
+/// Unchecked: IOKit delivers its notifications on the main queue, the only place the watcher is used.
+final class AppleUSBWatcher: @unchecked Sendable {
+    private let onChange: @MainActor () -> Void
+    private var port: IONotificationPortRef?
+    private var iterators: [io_iterator_t] = []
+
+    init(onChange: @escaping @MainActor () -> Void) {
+        self.onChange = onChange
+        guard let port = IONotificationPortCreate(kIOMainPortDefault) else { return }
+        self.port = port
+        IONotificationPortSetDispatchQueue(port, .main)
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        let callback: IOServiceMatchingCallback = { context, iterator in
+            AppleUSBWatcher.drain(iterator)
+            guard let context else { return }
+            let watcher = Unmanaged<AppleUSBWatcher>.fromOpaque(context).takeUnretainedValue()
+            MainActor.assumeIsolated { watcher.onChange() }
+        }
+        for type in [kIOFirstMatchNotification, kIOTerminatedNotification] {
+            let matching = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary
+            matching["idVendor"] = 0x05AC
+            var iterator: io_iterator_t = 0
+            guard IOServiceAddMatchingNotification(port, type, matching, callback, context, &iterator) == KERN_SUCCESS else { continue }
+            // Draining arms the notification; devices already plugged in aren't changes.
+            Self.drain(iterator)
+            iterators.append(iterator)
+        }
+    }
+
+    deinit {
+        iterators.forEach { IOObjectRelease($0) }
+        if let port { IONotificationPortDestroy(port) }
+    }
+
+    private static func drain(_ iterator: io_iterator_t) {
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            IOObjectRelease(service)
+            service = IOIteratorNext(iterator)
+        }
     }
 }

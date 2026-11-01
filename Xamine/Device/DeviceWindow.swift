@@ -46,7 +46,7 @@ struct DeviceWindow: View {
                 // A list rather than a menu Picker: SwiftUI can build menu items off the main thread.
                 List(manager.devices, selection: $manager.selectedDeviceID) { device in
                     HStack {
-                        Image(systemName: device.isSimulator ? "macbook.and.iphone" : "iphone")
+                        Image(systemName: device.isSimulator ? "macbook.and.iphone" : device.symbol)
                             .frame(width: 20)
                         Text(device.name)
                         Spacer()

@@ -26,12 +26,23 @@ final class WindowPickerController {
         }
     }
 
+    /// A connected iPhone or iPad, offered as a button on the edge of the screen in click mode.
+    struct Device: Equatable {
+        let id: String
+        let name: String
+        let symbol: String
+    }
+
     private var panels: [PickerPanel] = []
     private var candidates: [Candidate] = []
     private var hidden: [NSWindow] = []
     private var completion: ((PickedWindow?) -> Void)?
+    private var onDevice: ((String) -> Void)?
     private var trackingTimer: Timer?
     private(set) var hovered: Candidate?
+    private(set) var devices: [Device] = []
+    private(set) var hoveredDeviceID: String?
+    private var deviceScreen: NSScreen?
     private(set) var isHandsOff = false
     private(set) var secondsRemaining = 0
 
@@ -39,8 +50,12 @@ final class WindowPickerController {
 
     // MARK: - Click mode
 
-    func start(completion: @escaping (PickedWindow?) -> Void) {
+    /// `onDevice` is called with a device's ID instead of `completion` when its button is clicked.
+    func start(devices: [Device], onDevice: @escaping (String) -> Void, completion: @escaping (PickedWindow?) -> Void) {
         guard !isActive else { return }
+        self.devices = devices
+        self.onDevice = onDevice
+        deviceScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         begin(handsOff: false, completion: completion)
         NSApp.activate(ignoringOtherApps: true)
         panels.first { $0.screen == NSScreen.main }?.makeKey()
@@ -110,8 +125,43 @@ final class WindowPickerController {
         }
     }
 
+    /// Replaces the device buttons, e.g. once a device list that was still loading comes in.
+    func setDevices(_ devices: [Device]) {
+        guard isActive, !isHandsOff, devices != self.devices else { return }
+        self.devices = devices
+        updateHover()
+        redraw()
+    }
+
+    /// Each device's button in Cocoa screen coordinates: a column centered on the right edge of the screen picking started on.
+    var deviceButtons: [(device: Device, frame: NSRect)] {
+        guard let screen = deviceScreen, !isHandsOff, !devices.isEmpty else { return [] }
+        let size = NSSize(width: 96, height: 92)
+        let spacing: CGFloat = 12
+        let area = screen.visibleFrame
+        let total = CGFloat(devices.count) * size.height + CGFloat(devices.count - 1) * spacing
+        return devices.enumerated().map { index, device in
+            let top = area.midY + total / 2 - CGFloat(index) * (size.height + spacing)
+            return (device, NSRect(x: area.maxX - size.width - 20, y: top - size.height, width: size.width, height: size.height))
+        }
+    }
+
     func updateHover() {
-        let point = Self.cgPoint(fromCocoa: NSEvent.mouseLocation)
+        let mouse = NSEvent.mouseLocation
+        let deviceID = deviceButtons.first { $0.frame.contains(mouse) }?.device.id
+        if deviceID != hoveredDeviceID {
+            hoveredDeviceID = deviceID
+            redraw()
+        }
+        if deviceID != nil {
+            if hovered != nil {
+                hovered = nil
+                redraw()
+            }
+            return
+        }
+
+        let point = Self.cgPoint(fromCocoa: mouse)
         let next = candidates.lazy.compactMap { $0.hit(point) }.first.map { candidate in
             Candidate(window: candidate.window.anchored(at: point), icon: candidate.icon)
         } ?? (isHandsOff ? Self.desktopCandidate(at: point) : nil)
@@ -126,7 +176,11 @@ final class WindowPickerController {
 
     func finish(selecting: Bool) {
         if selecting { updateHover() }
+        let pickedDevice = selecting ? hoveredDeviceID : nil
         let result = selecting ? hovered?.window : nil
+        if let pickedDevice {
+            Log.picker.notice("picked device \(pickedDevice, privacy: .public)")
+        }
         if let result {
             Log.picker.notice("picked \(result.appName, privacy: .public) pid=\(result.pid) layer=\(result.layer) window=\(result.windowID) bounds=\(String(describing: result.bounds), privacy: .public) anchor=\(String(describing: result.anchor), privacy: .public) handsOff=\(self.isHandsOff)")
         }
@@ -136,13 +190,22 @@ final class WindowPickerController {
         panels = []
         candidates = []
         hovered = nil
+        devices = []
+        hoveredDeviceID = nil
+        deviceScreen = nil
         isHandsOff = false
         NSCursor.arrow.set()
-        if result == nil { hidden.forEach { $0.orderFront(nil) } }
+        if result == nil && pickedDevice == nil { hidden.forEach { $0.orderFront(nil) } }
         hidden = []
         let completion = self.completion
+        let onDevice = self.onDevice
         self.completion = nil
-        completion?(result)
+        self.onDevice = nil
+        if let pickedDevice {
+            onDevice?(pickedDevice)
+        } else {
+            completion?(result)
+        }
     }
 
     // MARK: - Window list
@@ -340,8 +403,13 @@ private final class PickerOverlayView: NSView {
             drawHint("Inspecting what's under the cursor in \(controller.secondsRemaining)…  ·  \(ShortcutStore.shared.handsOff.displayString) to pick now", in: bounds)
         }
 
+        defer { drawDevices(controller, on: screen) }
+
         guard let hovered = controller.hovered else {
-            if !controller.isHandsOff { drawHint("Click a window to inspect it  ·  Esc to cancel", in: bounds) }
+            if !controller.isHandsOff, controller.hoveredDeviceID == nil {
+                let target = controller.devices.isEmpty ? "a window" : "a window or a device"
+                drawHint("Click \(target) to inspect it  ·  Esc to cancel", in: bounds)
+            }
             return
         }
 
@@ -357,6 +425,39 @@ private final class PickerOverlayView: NSView {
         path.stroke()
 
         drawBadge(for: hovered, centeredIn: rect.intersection(bounds))
+    }
+
+    /// Buttons for connected iPhones and iPads, drawn above any window highlight.
+    private func drawDevices(_ controller: WindowPickerController, on screen: NSScreen) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byTruncatingTail
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 32, weight: .regular).applying(.init(paletteColors: [.white]))
+
+        for (device, global) in controller.deviceButtons {
+            let rect = global.offsetBy(dx: -screen.frame.minX, dy: -screen.frame.minY)
+            guard rect.intersects(bounds) else { continue }
+            let isHovered = controller.hoveredDeviceID == device.id
+
+            let path = NSBezierPath(roundedRect: rect, xRadius: 18, yRadius: 18)
+            (isHovered ? NSColor.controlAccentColor : NSColor.black.withAlphaComponent(0.7)).setFill()
+            path.fill()
+            if isHovered {
+                NSColor.white.withAlphaComponent(0.9).setStroke()
+                path.lineWidth = 2
+                path.stroke()
+            }
+
+            if let symbol = NSImage(systemSymbolName: device.symbol, accessibilityDescription: nil)?.withSymbolConfiguration(symbolConfig) {
+                let size = symbol.size
+                symbol.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.minY + 34 + (40 - size.height) / 2, width: size.width, height: size.height))
+            }
+            let name = NSAttributedString(string: device.name, attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white, .paragraphStyle: paragraph,
+            ])
+            name.draw(with: NSRect(x: rect.minX + 6, y: rect.minY + 12, width: rect.width - 12, height: 16),
+                      options: [.truncatesLastVisibleLine, .usesLineFragmentOrigin])
+        }
     }
 
     private func drawBadge(for candidate: WindowPickerController.Candidate, centeredIn rect: NSRect) {

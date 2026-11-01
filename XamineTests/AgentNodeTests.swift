@@ -21,6 +21,27 @@ import Testing
         return root.makeTree(appName: "Settings", bundleID: "com.apple.Preferences")
     }
 
+    @Test func prefersIdentifiedLayerWithSameFrame() throws {
+        let json = """
+        {"type":"application","frame":[0,0,400,800],"children":[
+          {"type":"cell","frame":[10,100,200,40],"label":"Audio","children":[
+            {"type":"other","frame":[10,100,200,40],"children":[]}
+          ]},
+          {"type":"cell","frame":[10,200,200,40],"label":"News","children":[
+            {"type":"other","frame":[10,200,180,40],"children":[]}
+          ]}
+        ]}
+        """
+        let root = try JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        let tree = root.makeTree(appName: "News", bundleID: "com.apple.news")
+        // Same frame as the labeled cell: pick the cell, but keep the unlabeled view reachable in the stack.
+        let audio = tree.hitStack(CGPoint(x: 50, y: 120))
+        #expect(audio == [0, 1, 2])
+        #expect(tree.preferredLayer(in: audio) == 1)
+        // A smaller child is still the deeper, more precise pick.
+        #expect(tree.preferredLayer(in: tree.hitStack(CGPoint(x: 50, y: 220))) == 4)
+    }
+
     @Test func convertsSnapshot() throws {
         let tree = try tree()
         #expect(tree.nodes.count == 6)

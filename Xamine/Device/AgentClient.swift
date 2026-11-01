@@ -73,8 +73,11 @@ struct AgentClient: Sendable {
 
 /// An inspector session against an agent.
 struct DeviceInspection: Sendable {
-    let client: AgentClient
+    var client: AgentClient
+    let deviceID: String
     let deviceName: String
+    /// SF Symbol for the device: `iphone` or `ipad`.
+    let symbol: String
     /// The app to inspect, or `nil` to follow whichever app is in the foreground on each scan.
     let bundleID: String?
     /// Bundle IDs checked, in order, when following the foreground app.

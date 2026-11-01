@@ -13,16 +13,20 @@ struct HierarchyOutline: View {
                     HierarchyRow(
                         node: tree.node(row.id),
                         isExpanded: model.expandedIDs.contains(row.id) || !model.searchText.isEmpty,
-                        isHovered: model.hoveredID == row.id,
                         toggle: { model.toggleExpanded(row.id) }
                     )
+                    // Hover is read in its own view, so moving the mouse redraws one row instead of the whole list.
+                    .background { HoverHighlight(model: model, id: row.id) }
                     .padding(.leading, CGFloat(row.depth) * 14)
                     .tag(row.id)
                     .id(row.id)
                     .onHover { inside in
                         if inside { model.hoveredID = row.id } else if model.hoveredID == row.id { model.hoveredID = nil }
                     }
-                    .contextMenu { contextMenu(for: tree.node(row.id), builder: builder) }
+                    .contextMenu {
+                        HierarchyContextMenu(node: tree.node(row.id), builder: builder, copy: model.copy,
+                                             expandAll: { expandAll(below: row.id) })
+                    }
                 }
                 .listStyle(.inset)
                 .environment(\.defaultMinListRowHeight, 22)
@@ -46,28 +50,6 @@ struct HierarchyOutline: View {
         }
     }
 
-    @ViewBuilder private func contextMenu(for node: UINode, builder: QueryBuilder?) -> some View {
-        if let identifier = node.identifier.nonEmpty {
-            Button("Copy Identifier") { model.copy(identifier, message: "Copied identifier") }
-        }
-        if let text = node.displayText {
-            Button("Copy Label") { model.copy(text, message: "Copied label") }
-        }
-        if let queries = builder?.queries(for: node.id) {
-            Divider()
-            if let byIdentifier = queries.byIdentifier {
-                Button("Copy Identifier Query") { model.copy(byIdentifier.code, message: "Copied identifier query") }
-            }
-            Button("Copy Container Query") { model.copy(queries.fromContainer.code, message: "Copied container query") }
-            if let fromAnchor = queries.fromAnchor {
-                Button("Copy Anchored Query") { model.copy(fromAnchor.code, message: "Copied anchored query") }
-            }
-            Button("Copy Full Path from Window") { model.copy(queries.byHierarchy.code, message: "Copied full path") }
-        }
-        Divider()
-        Button("Expand All Below") { expandAll(below: node.id) }
-    }
-
     private func expandAll(below id: Int) {
         guard let tree = model.tree else { return }
         var stack = [id]
@@ -81,7 +63,6 @@ struct HierarchyOutline: View {
 private struct HierarchyRow: View {
     let node: UINode
     let isExpanded: Bool
-    let isHovered: Bool
     let toggle: () -> Void
 
     var body: some View {
@@ -127,6 +108,46 @@ private struct HierarchyRow: View {
         }
         .font(.callout)
         .padding(.vertical, 1)
-        .background(isHovered ? Color.accentColor.opacity(0.08) : .clear, in: .rect(cornerRadius: 4))
+    }
+}
+
+private struct HoverHighlight: View {
+    let model: InspectorModel
+    let id: Int
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(model.hoveredID == id ? Color.accentColor.opacity(0.08) : .clear)
+    }
+}
+
+/// Builds its queries in `body`, which SwiftUI only evaluates when the menu opens; the `contextMenu` closure itself
+/// runs on every redraw of the list.
+private struct HierarchyContextMenu: View {
+    let node: UINode
+    let builder: QueryBuilder?
+    let copy: (String, String) -> Void
+    let expandAll: () -> Void
+
+    var body: some View {
+        if let identifier = node.identifier.nonEmpty {
+            Button("Copy Identifier") { copy(identifier, "Copied identifier") }
+        }
+        if let text = node.displayText {
+            Button("Copy Label") { copy(text, "Copied label") }
+        }
+        if let queries = builder?.queries(for: node.id) {
+            Divider()
+            if let byIdentifier = queries.byIdentifier {
+                Button("Copy Identifier Query") { copy(byIdentifier.code, "Copied identifier query") }
+            }
+            Button("Copy Container Query") { copy(queries.fromContainer.code, "Copied container query") }
+            if let fromAnchor = queries.fromAnchor {
+                Button("Copy Anchored Query") { copy(fromAnchor.code, "Copied anchored query") }
+            }
+            Button("Copy Full Path from Window") { copy(queries.byHierarchy.code, "Copied full path") }
+        }
+        Divider()
+        Button("Expand All Below", action: expandAll)
     }
 }

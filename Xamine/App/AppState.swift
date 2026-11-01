@@ -27,6 +27,19 @@ final class AppState {
             HotKey(keyCode: shortcuts.handsOff.keyCode, modifiers: shortcuts.handsOff.modifiers) { [weak self] in self?.startHandsOff(delay: 0) },
         ]
         shortcuts.onChange = { [weak self] in self?.applyShortcuts() }
+        // When a device scan can't reach the agent: reconnect, giving it a moment to relaunch, or start it again.
+        inspector.recoverDevice = { [weak self] inspection in
+            guard let self, devices.selectedDeviceID == inspection.deviceID else { return nil }
+            if await devices.reconnect(wait: .seconds(8)) { return devices.client }
+            inspectForeground(onDeviceID: inspection.deviceID, bundleID: inspection.bundleID)
+            return nil
+        }
+        // So ⌘⇧X can offer a connected iPhone or iPad straight away, and drops it once it's gone.
+        devices.devicesChanged = { [weak self] in
+            guard let self else { return }
+            picker.setDevices(pickerDevices)
+        }
+        devices.watchForDevices()
         if !permissions.allGranted {
             showOnboarding()
         } else if UserDefaults.standard.bool(forKey: "pickOnLaunch") {
@@ -49,9 +62,34 @@ final class AppState {
             showOnboarding()
             return
         }
-        picker.start { [weak self] picked in
+        picker.start(devices: pickerDevices) { [weak self] deviceID in
+            self?.inspectForeground(onDeviceID: deviceID)
+        } completion: { [weak self] picked in
             guard let self else { return }
             if let picked { inspect(picked) }
+        }
+        // Devices are kept current by USB notifications; this catches anything they missed.
+        Task { await devices.refreshDevices() }
+    }
+
+    private var pickerDevices: [WindowPickerController.Device] {
+        devices.connectedDevices.map { .init(id: $0.id, name: $0.name, symbol: $0.symbol) }
+    }
+
+    /// Inspects the app in front on a device picked from the edge of the screen, starting its agent first if needed.
+    /// `bundleID` keeps inspecting that app once the agent is up; `nil` follows the foreground app.
+    func inspectForeground(onDeviceID id: String, bundleID: String? = nil) {
+        devices.selectedDeviceID = id
+        guard let device = devices.selectedDevice else { return }
+        // The inspector shows a loading screen while the agent builds and launches, and what went wrong if it fails.
+        if case .failed = devices.state { devices.stopAgent() } // clear an earlier failure
+        inspector.beginDeviceLaunch(.init(deviceID: id, deviceName: device.name, symbol: device.symbol))
+        showInspector()
+        Task {
+            if await !devices.reconnect() { await devices.startAgent() }
+            // Picking something else or closing the inspector abandons the launch.
+            guard inspector.deviceLaunch?.deviceID == id, devices.isAgentRunning, devices.selectedDeviceID == id else { return }
+            inspectDevice(bundleID: bundleID)
         }
     }
 
@@ -91,7 +129,14 @@ final class AppState {
         let window = inspectorWindow ?? makeWindow(
             title: "Xamine",
             size: NSSize(width: 1280, height: 800),
-            content: InspectorView(model: inspector, pickAnother: { [weak self] in self?.startPicking() })
+            content: InspectorView(
+                model: inspector,
+                devices: devices,
+                pickAnother: { [weak self] in self?.startPicking() },
+                startDevice: { [weak self] id in self?.inspectForeground(onDeviceID: id) },
+                showDeviceSettings: { [weak self] in self?.showDevices() },
+                cancelDeviceLaunch: { [weak self] in self?.inspectorWindow?.close() }
+            )
         )
         window.setFrameAutosaveName("InspectorWindow")
         inspectorWindow = window
@@ -113,7 +158,9 @@ final class AppState {
         guard let client = devices.client, let device = devices.selectedDevice else { return }
         let inspection = DeviceInspection(
             client: client,
+            deviceID: device.id,
             deviceName: device.name,
+            symbol: device.symbol,
             bundleID: bundleID,
             candidates: devices.foregroundCandidates,
             appNames: Dictionary(devices.apps.map { ($0.bundleID, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -168,6 +215,10 @@ final class AppState {
     }
 
     private func windowWillClose(_ closing: NSWindow?) {
+        if closing === inspectorWindow, inspector.deviceLaunch != nil {
+            inspector.cancelDeviceLaunch()
+            devices.stopAgent()
+        }
         let others = [inspectorWindow, onboardingWindow, devicesWindow].compactMap { $0 }.filter { $0 !== closing && $0.isVisible }
         if others.isEmpty { NSApp.setActivationPolicy(.accessory) }
     }

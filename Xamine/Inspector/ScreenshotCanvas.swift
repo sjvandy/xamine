@@ -35,7 +35,7 @@ struct ScreenshotCanvas: View {
                 .onContinuousHover { phase in
                     switch phase {
                     case .active(let location):
-                        isFocused = true
+                        if !isFocused { isFocused = true }
                         model.hoverScreenshot(at: globalPoint(location, tree, scale))
                     case .ended:
                         model.hoverScreenshot(at: nil)
@@ -63,7 +63,9 @@ struct ScreenshotCanvas: View {
                 ProgressView("Scanning…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView("No Screenshot", systemImage: "photo",
-                                       description: Text("Xamine couldn't capture this window. Check Screen Recording permission."))
+                                       description: Text(model.device != nil
+                                           ? "The device didn't send a screenshot. Make sure it's unlocked, then re-scan (⌘R)."
+                                           : "Xamine couldn't capture this window. Check Screen Recording permission."))
             }
         }
         .padding(20)
