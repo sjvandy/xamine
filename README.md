@@ -6,7 +6,7 @@
 
 A menu-bar app for macOS that inspects any app's UI hierarchy and generates XCUITest queries for it.
 
-![Xamine inspecting the Mac User Guide in Tips: window screenshot on the left, element hierarchy and generated XCUITest queries on the right](docs/screenshot.png)
+![Xamine inspecting the Brewline demo app on macOS: window screenshot on the left, element hierarchy and generated XCUITest queries on the right](docs/media/mac.png)
 
 - **⌘⇧X** (or *Inspect Application…* in the menu bar) starts a ⌘⇧5-style picker for app windows.
 - **⌥⌘⇧X** inspects whatever is under the cursor without taking focus, for UI that closes when you click away: the menu bar and its menus, Spotlight, Control Center, the Dock, the desktop and Notification Center. *Inspect Under Cursor in 5 Seconds* does the same after a countdown.
