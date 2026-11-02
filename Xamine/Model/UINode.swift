@@ -146,14 +146,25 @@ struct UITree: Sendable {
             .map(\.id)
     }
 
-    /// The layer to pick by default from a `hitStack`: the deepest one, unless layers just above it share its exact
-    /// frame and one of those has an identifier or label (a cell wrapping an unlabeled view, say), which queries better.
+    /// The layer to pick by default from a `hitStack`. When the deepest layer has nothing to query by (no identifier,
+    /// label, title or value), the nearest labeled layer above it wins if it isn't much bigger: an icon's artwork or a
+    /// cell's inner view is hard to grab, and the labeled icon or cell around it is what a test would use. A labeled
+    /// layer more than `maxEnclosureRatio` times the area is a container, and the deep pick stays. The other layers
+    /// remain reachable in the stack.
     func preferredLayer(in stack: [Int]) -> Int? {
         guard let deepest = stack.last else { return nil }
-        let frame = nodes[deepest].frame
-        let sameFrame = stack.reversed().prefix { nodes[$0].frame == frame }
-        return sameFrame.first { nodes[$0].hasSelector } ?? deepest
+        guard !nodes[deepest].hasSelector, let frame = nodes[deepest].frame, frame.width * frame.height > 0 else { return deepest }
+        let area = frame.width * frame.height
+        for id in stack.dropLast().reversed() {
+            guard let outer = nodes[id].frame else { continue }
+            if outer.width * outer.height > area * Self.maxEnclosureRatio { break }
+            if nodes[id].hasSelector && !nodes[id].isScrollIndicator { return id }
+        }
+        return deepest
     }
+
+    /// How much bigger than the deepest element a labeled layer above it can be and still be picked in its place.
+    static let maxEnclosureRatio: CGFloat = 2.5
 
     /// The deepest node whose frame contains `point` (global coordinates), preferring the smallest area on ties.
     func hitTest(_ point: CGPoint) -> UINode? {

@@ -28,7 +28,7 @@ import Testing
             {"type":"other","frame":[10,100,200,40],"children":[]}
           ]},
           {"type":"cell","frame":[10,200,200,40],"label":"News","children":[
-            {"type":"other","frame":[10,200,180,40],"children":[]}
+            {"type":"other","frame":[10,200,60,16],"children":[]}
           ]}
         ]}
         """
@@ -38,8 +38,8 @@ import Testing
         let audio = tree.hitStack(CGPoint(x: 50, y: 120))
         #expect(audio == [0, 1, 2])
         #expect(tree.preferredLayer(in: audio) == 1)
-        // A smaller child is still the deeper, more precise pick.
-        #expect(tree.preferredLayer(in: tree.hitStack(CGPoint(x: 50, y: 220))) == 4)
+        // A child far smaller than the labeled cell (a tiny badge, say) is still the more precise pick.
+        #expect(tree.preferredLayer(in: tree.hitStack(CGPoint(x: 30, y: 205))) == 4)
     }
 
     @Test func convertsSnapshot() throws {

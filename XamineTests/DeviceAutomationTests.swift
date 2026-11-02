@@ -165,3 +165,55 @@ import Testing
         #expect(id.map { tree.node($0).identifier } == "SpotlightSearchField")
     }
 }
+
+/// Spotlight's result tiles: a labeled icon wraps unlabeled artwork, inside a labeled cell inside a big container.
+@Suite struct EnclosingLabelPreferenceTests {
+    let tree: UITree = {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"collectionView","frame":[14,128,375,404],"children":[
+              {"type":"cell","frame":[204,154,78,91],"label":"Instagram","children":[
+                {"type":"icon","frame":[204,154,78,91],"identifier":"Instagram","label":"Instagram","children":[
+                  {"type":"other","frame":[211,156,64,78],"children":[
+                    {"type":"other","frame":[211,156,64,64],"children":[
+                      {"type":"other","frame":[211,156,64,64],"children":[]}]}]}]}]}]}]}]}
+        """
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        return root.makeTree(appName: "Spotlight", bundleID: "com.apple.campo")
+    }()
+
+    @Test func unlabeledArtworkYieldsToTheLabeledIcon() {
+        let stack = tree.hitStack(CGPoint(x: 240, y: 190))
+        let picked = tree.preferredLayer(in: stack).map { tree.node($0) }
+        #expect(picked?.kind.typeName == "icon")
+        #expect(picked?.identifier == "Instagram")
+        // The artwork underneath is still in the stack, for stepping down to it.
+        #expect(stack.count > stack.firstIndex { tree.node($0).kind.typeName == "icon" }! + 1)
+    }
+
+    @Test func aBigLabeledContainerIsNotWorthJumpingTo() {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"cell","frame":[0,0,402,400],"label":"Big cell","children":[
+              {"type":"other","frame":[20,20,50,50],"children":[]}]}]}]}
+        """
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        let tree = root.makeTree(appName: "App", bundleID: "x")
+        let id = tree.preferredLayer(in: tree.hitStack(CGPoint(x: 30, y: 30)))
+        #expect(id.map { tree.node($0).frame } == CGRect(x: 20, y: 20, width: 50, height: 50))
+    }
+
+    @Test func aLabeledDeepestElementIsLeftAlone() {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"cell","frame":[0,0,200,60],"label":"Row","children":[
+              {"type":"button","frame":[150,10,40,40],"label":"Info","children":[]}]}]}]}
+        """
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        let tree = root.makeTree(appName: "App", bundleID: "x")
+        #expect(tree.preferredLayer(in: tree.hitStack(CGPoint(x: 170, y: 30))).map { tree.node($0).label } == "Info")
+    }
+}
