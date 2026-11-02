@@ -84,6 +84,12 @@ struct UINode: Identifiable, Hashable, Sendable {
     }
 
     var hasSelector: Bool { bestKey != nil }
+
+    /// A scroll indicator on iOS ("Vertical scroll bar, 1 page"): an `other` the system draws over scrolling content.
+    /// It overlaps the real elements, so it's never what someone is pointing at.
+    var isScrollIndicator: Bool {
+        kind.typeName == "other" && label?.localizedCaseInsensitiveContains("scroll bar") == true
+    }
 }
 
 enum TargetPlatform: String, Sendable {
@@ -133,7 +139,8 @@ struct UITree: Sendable {
 
     /// Every layer under `point`, outermost first: the deepest hit plus each ancestor whose frame also contains the point.
     func hitStack(_ point: CGPoint) -> [Int] {
-        guard let hit = hitTest(point) else { return [] }
+        guard let deepest = hitTest(point) else { return [] }
+        let hit = namedAlternative(to: deepest, at: point) ?? deepest
         return (ancestors(of: hit.id) + [hit])
             .filter { $0.frame?.contains(point) == true }
             .map(\.id)
@@ -153,7 +160,7 @@ struct UITree: Sendable {
         var best: UINode?
         var bestArea = CGFloat.infinity
         for node in nodes {
-            guard let frame = node.frame, frame.width > 0, frame.height > 0, frame.contains(point) else { continue }
+            guard let frame = node.frame, frame.width > 0, frame.height > 0, frame.contains(point), !node.isScrollIndicator else { continue }
             let area = frame.width * frame.height
             if area < bestArea || (area == bestArea && node.depth > (best?.depth ?? -1)) {
                 best = node
@@ -161,6 +168,22 @@ struct UITree: Sendable {
             }
         }
         return best
+    }
+
+    /// A named node on another branch whose area is within 5% of `hit`'s, if `hit` itself has nothing to query by.
+    /// Overlays often put an unnamed effect or wrapper a point smaller than the named element it covers (Spotlight's
+    /// prompt does); the named one makes the better query. Ancestors of `hit` are left alone, so a view stacked on a
+    /// labeled cell stays reachable in the stack as before.
+    private func namedAlternative(to hit: UINode, at point: CGPoint) -> UINode? {
+        guard !hit.hasSelector, let hitFrame = hit.frame else { return nil }
+        let limit = hitFrame.width * hitFrame.height * 1.05
+        let ancestorIDs = Set(ancestors(of: hit.id).map(\.id))
+        return nodes.filter { node in
+            guard node.id != hit.id, node.hasSelector, !node.isScrollIndicator, !ancestorIDs.contains(node.id),
+                  let frame = node.frame, frame.width > 0, frame.height > 0, frame.contains(point) else { return false }
+            return frame.width * frame.height <= limit
+        }
+        .min { ($0.frame!.width * $0.frame!.height, -$0.depth) < ($1.frame!.width * $1.frame!.height, -$1.depth) }
     }
 }
 

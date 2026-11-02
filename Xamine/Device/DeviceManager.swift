@@ -69,6 +69,9 @@ final class DeviceManager {
     /// it. It's checked before everything else, since it's on top when it's showing. `campo` is Spotlight.
     static let systemOverlays = ["com.apple.campo"]
 
+    /// Names for system UI that isn't in the installed apps list.
+    static let systemNames = ["com.apple.springboard": "Home Screen", "com.apple.campo": "Spotlight"]
+
     /// Apple apps worth checking first when detecting the foreground app, ahead of the full installed list.
     static let commonApps = [
         "com.apple.Preferences", "com.apple.mobilesafari", "com.apple.MobileSMS", "com.apple.mobilemail",
@@ -138,7 +141,7 @@ final class DeviceManager {
     }
 
     func appName(for bundleID: String) -> String {
-        if bundleID == "com.apple.springboard" { return "Home Screen" }
+        if let name = Self.systemNames[bundleID] { return name }
         return apps.first { $0.bundleID == bundleID }?.name ?? bundleID
     }
 

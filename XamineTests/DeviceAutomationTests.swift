@@ -116,3 +116,52 @@ import Testing
         #expect(Set(candidates).count == candidates.count)
     }
 }
+
+/// Spotlight draws an unnamed effect view a point smaller than its named prompt container.
+@Suite struct NamedElementPreferenceTests {
+    let tree: UITree = {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"other","frame":[14,14,375,101],"identifier":"SpotlightPromptContainer","children":[
+              {"type":"textView","frame":[52,52,299,25],"identifier":"SpotlightSearchField","placeholder":"Search or Ask","children":[]}]}]},
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"other","frame":[13,13,374,100],"children":[]},
+            {"type":"other","frame":[0,300,402,200],"children":[
+              {"type":"other","frame":[10,310,80,60],"children":[]}]}]}
+        ]}
+        """
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        return root.makeTree(appName: "Spotlight", bundleID: "com.apple.campo")
+    }()
+
+    @Test func namedElementBeatsANearlyIdenticalUnnamedOne() {
+        func picked(_ x: Double, _ y: Double) -> UINode? {
+            let stack = tree.hitStack(CGPoint(x: x, y: y))
+            return tree.preferredLayer(in: stack).map { tree.node($0) }
+        }
+        #expect(picked(200, 100)?.identifier == "SpotlightPromptContainer")
+        // A clearly smaller named element still wins over both.
+        #expect(picked(100, 64)?.identifier == "SpotlightSearchField")
+    }
+
+    @Test func unnamedElementsStillGetPickedWhenNothingNamedIsNearlyAsSmall() {
+        let stack = tree.hitStack(CGPoint(x: 20, y: 320))
+        let hit = tree.preferredLayer(in: stack).map { tree.node($0) }
+        #expect(hit?.frame == CGRect(x: 10, y: 310, width: 80, height: 60))
+        #expect(hit?.hasSelector == false)
+    }
+
+    @Test func scrollIndicatorsAreNeverPicked() throws {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"textView","frame":[52,52,299,25],"identifier":"SpotlightSearchField","children":[
+              {"type":"other","frame":[52,61,299,13],"label":"Horizontal scroll bar, 1 page","children":[]}]}]}]}
+        """
+        let root = try JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        let tree = root.makeTree(appName: "Spotlight", bundleID: "com.apple.campo")
+        let id = tree.preferredLayer(in: tree.hitStack(CGPoint(x: 150, y: 66)))
+        #expect(id.map { tree.node($0).identifier } == "SpotlightSearchField")
+    }
+}

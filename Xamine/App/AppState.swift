@@ -169,7 +169,7 @@ final class AppState {
             bundleID: bundleID,
             candidates: devices.foregroundCandidates,
             appNames: Dictionary(devices.apps.map { ($0.bundleID, $0.name) }, uniquingKeysWith: { first, _ in first })
-                .merging(["com.apple.springboard": "Home Screen"]) { current, _ in current }
+                .merging(DeviceManager.systemNames) { current, _ in current }
         )
         showInspector()
         Task { await inspector.loadDevice(inspection) }
