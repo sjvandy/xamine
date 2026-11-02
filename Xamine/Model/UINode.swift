@@ -148,45 +148,11 @@ struct UITree: Sendable {
         return sameFrame.first { nodes[$0].hasSelector } ?? deepest
     }
 
-    /// The element at `point` (global coordinates): the smallest node whose frame contains it, preferring the deeper
-    /// one on ties. Where the tree is an iOS app's, windows are stacked in order and later ones draw on top, so the
-    /// topmost window with something at the point wins. That's what keeps Spotlight, Siri, the keyboard or an alert
-    /// from losing to the Home Screen icons beneath them.
+    /// The deepest node whose frame contains `point` (global coordinates), preferring the smallest area on ties.
     func hitTest(_ point: CGPoint) -> UINode? {
-        let windows = root?.kind.typeName == "application" ? nodes.first?.childIDs.filter { nodes[$0].kind.typeName == "window" } ?? [] : []
-        guard windows.count > 1 else { return smallestNode(containing: point, in: nodes.map(\.id)) }
-
-        for (position, windowID) in windows.enumerated().reversed() {
-            let window = nodes[windowID]
-            var ids = descendants(of: windowID)
-            // Overlay windows are mostly full-screen transparent wrappers; only what's drawn in them counts. The
-            // bottom window is the app itself, where a large view (a scroll view, say) is a fine target.
-            if position > 0, let frame = window.frame {
-                let area = frame.width * frame.height
-                let screen = frame.insetBy(dx: -1, dy: -1)
-                // Not wrappers, and not effects: a shadow or glow that spills past the screen edge isn't a target.
-                ids = ids.filter { id in nodes[id].frame.map { $0.width * $0.height < area * 0.9 && screen.contains($0) } ?? false }
-            }
-            if let hit = smallestNode(containing: point, in: ids) { return hit }
-        }
-        return nil
-    }
-
-    private func descendants(of id: Int) -> [Int] {
-        var result: [Int] = []
-        var stack = nodes[id].childIDs
-        while let next = stack.popLast() {
-            result.append(next)
-            stack.append(contentsOf: nodes[next].childIDs)
-        }
-        return result.sorted()
-    }
-
-    private func smallestNode(containing point: CGPoint, in ids: [Int]) -> UINode? {
         var best: UINode?
         var bestArea = CGFloat.infinity
-        for id in ids {
-            let node = nodes[id]
+        for node in nodes {
             guard let frame = node.frame, frame.width > 0, frame.height > 0, frame.contains(point) else { continue }
             let area = frame.width * frame.height
             if area < bestArea || (area == bestArea && node.depth > (best?.depth ?? -1)) {
