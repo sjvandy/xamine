@@ -728,6 +728,7 @@ final class AutomationService {
             }
         } else if let failed = resolution.failedStep {
             lines.append("Result: no match. Step \(failed + 1) (\(steps[failed].source)) found nothing.")
+            if let hint = AutomationHints.tabBarHint(steps: steps, tree: tree) { lines.append(hint) }
             let key = steps[failed].operation.key ?? steps[(failed + 1)...].lazy.compactMap(\.operation.key).first
             func score(_ id: Int) -> Double {
                 guard let key else { return 0 }
@@ -762,10 +763,6 @@ final class AutomationService {
                     lines.append("Similar text elsewhere in the window:")
                     elsewhere.forEach(add)
                 }
-            }
-            if let hint = AutomationHints.tabBarHint(steps: steps, tree: tree) {
-                lines.append("")
-                lines.append(hint)
             }
             if let first = pool.first, ["window", "navigationBar"].contains(tree.node(first).kind.typeName) {
                 lines.append("")
