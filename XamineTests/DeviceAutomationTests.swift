@@ -155,3 +155,13 @@ import Testing
         #expect(tree.hitTest(CGPoint(x: 100, y: 100))?.identifier == "menu-list")
     }
 }
+
+@MainActor @Suite struct ForegroundCandidateTests {
+    @Test func spotlightIsCheckedBeforeAppsAndSpringBoardFallsBack() {
+        let candidates = DeviceManager().foregroundCandidates
+        #expect(candidates.first == "com.apple.campo")
+        #expect(candidates.firstIndex(of: "com.apple.campo")! < candidates.firstIndex(of: "com.apple.mobilesafari")!)
+        #expect(!candidates.contains("com.apple.CarPlayApp"))
+        #expect(Set(candidates).count == candidates.count)
+    }
+}

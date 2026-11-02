@@ -65,6 +65,10 @@ final class DeviceManager {
     @ObservationIgnored var devicesChanged: (() -> Void)?
     var isAgentRunning: Bool { state == .running && runningDeviceID == selectedDeviceID }
 
+    /// System UI that draws over the Home Screen or an app from its own process, so SpringBoard's tree doesn't contain
+    /// it. It's checked before everything else, since it's on top when it's showing. `campo` is Spotlight.
+    static let systemOverlays = ["com.apple.campo"]
+
     /// Apple apps worth checking first when detecting the foreground app, ahead of the full installed list.
     static let commonApps = [
         "com.apple.Preferences", "com.apple.mobilesafari", "com.apple.MobileSMS", "com.apple.mobilemail",
@@ -130,7 +134,7 @@ final class DeviceManager {
     var foregroundCandidates: [String] {
         let installed = apps.map(\.bundleID).filter { !$0.contains("xctrunner") && !$0.hasPrefix("com.xamine.agent") && $0 != "com.apple.CarPlayApp" }
         var seen = Set<String>()
-        return (Self.commonApps + installed).filter { seen.insert($0).inserted }
+        return (Self.systemOverlays + Self.commonApps + installed).filter { seen.insert($0).inserted }
     }
 
     func appName(for bundleID: String) -> String {
