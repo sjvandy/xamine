@@ -177,30 +177,30 @@ enum AgentIntegration {
     - Recordings produce iOS code (`.tap()`, a tap before `typeText`, `swipeUp()`, `XCUIDevice.shared.press(.home)`). If tapping a switch's row doesn't toggle it, Xamine taps the switch inside and records `….switches.firstMatch.tap()`; keep that.
     - Spotlight (swipe down on the Home Screen) is its own app, `com.apple.campo`; pass `app: "com.apple.campo"` to read its results and keyboard. SpringBoard's tree doesn't contain them, only the Home Screen beneath.
     - For an element inside a numbered item (`Identifier:ResultCell,Section:0,Row:3`) with the same bounds, `get_queries` lists an "Enclosing item" query for the whole cell. Use that for "the fourth result"; it matches the cell, not the icon inside it.
-    - Lists load lazily: rows below the fold aren't in a snapshot until you `scroll`. If `find_elements` finds nothing, scroll and look again.
-    - iPhone and iPad layouts differ. On iPad (iOS 18+) tabs sit in a floating bar at the top that isn't a `tabBar`, so `app.tabBars.buttons["Cart"]` fails there; `app.buttons["Cart"].firstMatch` works on both. Check tests on each device family they must run on.
+    - Lists load lazily: rows below the fold aren't in a snapshot until you `scroll`. If `find_elements` finds nothing, it says so; scroll and look again.
+    - iPhone and iPad layouts differ. On iPad (iOS 18+) tabs sit in a floating bar at the top that isn't a `tabBar`, so `app.tabBars.buttons["Cart"]` fails there (`resolve_query` says so and suggests the button query); `app.buttons["Cart"].firstMatch` works on both. Check tests on each device family they must run on.
     - Snapshots show `[selected]` for the chosen segment or tab, and screenshots are in pixels (2× or 3× the snapshot's points).
     - You can run `xcodebuild test` on the device while Xamine's agent is running. If a test run can't start the app or hangs at launch, call `release_device` first; the next call with `device` starts the agent again.
 
     ## Ground rules
     - Xamine moves the real mouse and keyboard. Tell the user not to touch them while you drive, and never drive the UI while `xcodebuild test` is running.
-    - Element refs (`e12`) belong to the latest `snapshot` or `find_elements` of that app. After anything changes the UI (navigation, alerts), take a new snapshot before using refs, or pass `query` (an XCUITest query) instead.
-    - Don't guess identifiers: get them from `snapshot`, `find_elements` or `get_queries`. Prefer the query Xamine suggests; it has been checked against the live tree.
+    - Element refs (`e12`) belong to the latest `snapshot` or `find_elements` of that app. Actions find the element again by its query, so a ref from slightly earlier still works; if the element is gone you get a "snapshot changed" error instead of a click at the old position. After navigation or alerts, take a new snapshot, or pass `query` (an XCUITest query) instead.
+    - Don't guess identifiers: get them from `snapshot`, `find_elements` or `get_queries`. Prefer the query Xamine suggests; it has been checked against the live tree. When several elements share a key it gives `app.buttons["Cart"].firstMatch` (or `.matching(identifier:).element(boundBy: n)` for a later one). Identifiers that many elements share (`label-view`) aren't used as keys.
     - If `status` reports a missing permission, ask the user to grant it to Xamine in System Settings › Privacy & Security.
 
     ## Creating a UI test
     1. `launch_app` with the bundle ID, name, or a path to the .app. Check the `App:` path in its output: when several builds are installed it opens the newest, and lists the others. Pass a path if it picked the wrong one.
-    2. Explore: `snapshot` with `interactive_only: true` for an overview, `find_elements` with `text` or `kind` to locate things, and `screenshot` when the layout matters.
+    2. Explore: `snapshot` with `interactive_only: true` for an overview (controls and labeled rows only, no static text, images or scroll bars; drop the flag to read text), `find_elements` with `text` or `kind` to locate things, and `screenshot` when the layout matters.
     3. Get the app back to the starting screen the test will begin from (the test relaunches the app, so state such as a cart starts empty).
     4. `recording_start` with a test name, then perform the flow with `click`, `type_text`, `press_key`. After each step, snapshot again before using refs.
-    5. Add assertions with `wait_for` (a query, or `text`). It records `XCTAssertTrue(….waitForExistence(timeout:))`.
-    6. `recording_stop` returns the complete XCTestCase file **once**. Save it right away into the project's UI-test target folder (e.g. `<Project>/UITests/NameTests.swift`).
+    5. Add assertions with `wait_for` (a query, or `text`). It records `XCTAssertTrue(….waitForExistence(timeout:))`. Pass `label` or `value` to also check what the element says (e.g. a total or a switch's value); it records `XCTAssertEqual(el.label, "…")`.
+    6. `recording_stop` returns the complete XCTestCase file. Save it into the project's UI-test target folder (e.g. `<Project>/UITests/NameTests.swift`); on the command line, `recording-stop --output <path>` writes it. `recording_last` returns it again if you need it.
     7. Run it, e.g. `xcodebuild test -project P.xcodeproj -scheme S -destination 'platform=macOS' -only-testing:<UITestTarget>/<NameTests>`. If it fails, use `resolve_query` on the failing line's query, fix, rerun.
 
     ## Investigating a failing UI test
     1. Run the test and read the failing line and its query.
     2. Reproduce the test's steps up to that line with Xamine (`launch_app`, `click` the same queries).
-    3. `resolve_query` with the failing query. It shows each step's match count, the step that stops matching, what that step could choose from in the live UI (often the same element with new text), similar text elsewhere, and a text-free alternative.
+    3. `resolve_query` with the failing query. It shows each step's match count, the step that stops matching, what that step could choose from in the live UI (often the same element with new text), similar text elsewhere, and a text-free alternative when a short one exists.
     4. Fix the test: update the expected text, or make it independent of copy (by identifier or position), but keep it able to fail. For example, a "title isn't empty" check passes even if navigation didn't happen; prefer asserting something unique to the destination screen.
     5. Rerun the test until it passes.
 
@@ -215,9 +215,9 @@ enum AgentIntegration {
     | `screenshot` | PNG of the window or one element |
     | `get_queries` | All query variants for an element |
     | `click` / `type_text` / `press_key` / `scroll` | Act; each returns the XCUITest line |
-    | `wait_for` | Wait for a query/text (or `gone`); records an assertion |
+    | `wait_for` | Wait for a query/text (or `gone`, or a `label`/`value`); records an assertion |
     | `resolve_query` | Why a query does or doesn't match the live UI |
-    | `recording_start` / `recording_stop` | Turn actions into an XCTestCase file |
+    | `recording_start` / `recording_stop` / `recording_last` | Turn actions into an XCTestCase file; fetch the last one again |
 
     ## Running UI tests the first time
     macOS asks to enable Automation Mode for UI tests. If `xcodebuild test` fails with "Timed out while enabling automation mode", ask the user to run `sudo automationmodetool enable-automationmode-without-authentication` or approve the prompt by running the tests once in Xcode.

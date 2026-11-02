@@ -11,6 +11,12 @@ import Testing
         #expect(lines[3] == "---")
     }
 
+    @Test func skillMentionsEveryTool() {
+        for tool in Automation.tools {
+            #expect(AgentIntegration.skill.contains("`\(tool.name)`"), "\(tool.name) is missing from the skill")
+        }
+    }
+
     /// Runs the real `claude mcp add` against a throwaway CLAUDE_CONFIG_DIR, so the user's configuration isn't touched.
     @Test(.enabled(if: AgentIntegration.findClaude() != nil))
     func setsUpATarget() async throws {

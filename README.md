@@ -49,12 +49,12 @@ xamine help
 | `status`, `list_apps` | Permissions, frontmost app, running apps and their windows |
 | `list_devices`, `release_device` | Connected iPhones and iPads and available Simulators; stop Xamine's agent on a device so you can run your own UI tests there |
 | `launch_app` | Launches or activates an app by bundle ID, name or path; with several builds installed, opens the newest |
-| `snapshot`, `find_elements` | The window's hierarchy with refs (`e12`), or a search with the best query for each match |
+| `snapshot`, `find_elements` | The window's hierarchy with refs (`e12`; `--interactive-only` keeps just controls and labeled rows), or a search with the best query for each match, with a hint to scroll when nothing matches |
 | `screenshot`, `get_queries` | A PNG of the window or an element; every query Xamine can generate for an element |
 | `click`, `type_text`, `press_key`, `scroll` | Act on an element by ref or XCUITest query; each returns the equivalent XCUITest line |
-| `wait_for` | Waits for a query or text to appear or disappear, and records an assertion |
-| `recording_start`, `recording_stop` | Turns the actions in between into a complete `XCTestCase` file |
-| `resolve_query` | Evaluates a query against the live UI step by step: where it stops matching, what's there instead, and a text-free alternative |
+| `wait_for` | Waits for a query or text to appear or disappear, or for a `label` or `value` to match, and records an assertion |
+| `recording_start`, `recording_stop`, `recording_last` | Turns the actions in between into a complete `XCTestCase` file; `recording_last` returns the last one again, and on the command line `--output file.swift` saves it |
+| `resolve_query` | Evaluates a query against the live UI step by step: where it stops matching, what's there instead, and a text-free alternative when a short one exists; on iPad it explains that tabs aren't in a `tabBar` |
 
 ### iPhone, iPad and Simulator
 
@@ -69,6 +69,7 @@ xamine click 'app.buttons["add-to-cart-button"]' --device "iPad Mini"
 
 - The first call builds, installs and starts Xamine's XCUITest agent on the device, which takes a minute the first time. Requirements are the same as for inspecting a device: Xcode, a trusted device with Developer Mode and UI Automation on.
 - Actions are real XCUITest calls made by the agent on the device: taps, typing, swipes (`scroll`), `home`, and match counts for `resolve_query`. Recordings come out as iOS code (`.tap()`, a tap before `typeText`, `swipeUp()`, `XCUIDevice.shared.press(.home)`).
+- On the Mac too, `click`, `type_text` and `scroll` find a ref's element again by its query, so a ref from before the UI shifted still works; if the element is gone you get a "snapshot changed" error instead of a click in the old place.
 - Taps are made by query, so an element ref from before the screen changed still finds the right element. A tap on a SwiftUI toggle's row that doesn't flip it falls back to the switch inside it.
 - Spotlight is its own app, `com.apple.campo`; the inspector follows it when it's showing.
 - Quitting Xamine stops the agent on your device. If Xamine is force quit or crashes, the agent notices after 30 seconds and ends its own session, so the device doesn't stay in "Automation Running". You can run `xcodebuild test` on a device while the agent is up; use `release_device` if a run can't start.
