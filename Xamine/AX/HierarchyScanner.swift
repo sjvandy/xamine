@@ -143,6 +143,7 @@ enum HierarchyScanner {
             windowFrame: target.bounds
         )
         if target.isSimulator { tree.queryRootID = simulatorContentRoot(in: tree) ?? 0 }
+        tree.markGenericIdentifiers()
         return tree
     }
 

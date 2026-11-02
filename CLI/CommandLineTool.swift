@@ -41,7 +41,7 @@ enum CommandLineTool {
         do {
             result = try client.call(tool.name, params: params)
         } catch {
-            return fail("\(error.message) [\(error.code)]")
+            return fail("\(Automation.cliText(error.message)) [\(error.code)]")
         }
 
         var printable = result
@@ -58,10 +58,24 @@ enum CommandLineTool {
             printable = .object(object)
         }
 
+        // A recording's source goes to --output as a Swift file.
+        if case .object(var object) = printable, let source = object["source"]?.string, let output {
+            do {
+                try source.write(to: URL(fileURLWithPath: output), atomically: true, encoding: .utf8)
+            } catch {
+                return fail("Couldn't write \(output): \(error.localizedDescription)")
+            }
+            object["source"] = nil
+            object["path"] = .string(output)
+            let header = object["text"]?.string?.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
+            object["text"] = .string("\(header)\nSaved to \(output)")
+            printable = .object(object)
+        }
+
         if json {
             print(String(decoding: printable.encoded(pretty: true), as: UTF8.self))
         } else if let text = printable["text"]?.string {
-            print(text)
+            print(Automation.cliText(text))
         } else {
             print(String(decoding: printable.encoded(pretty: true), as: UTF8.self))
         }
@@ -98,13 +112,16 @@ enum CommandLineTool {
             for param in tool.params {
                 print("  --\(param.name.replacingOccurrences(of: "_", with: "-"))\(param.required ? " (required)" : "")  \(param.description)")
             }
+            if ["screenshot", "recording_stop", "recording_last"].contains(tool.name) {
+                print("  --output (file)  Where to save the \(tool.name == "screenshot" ? "PNG" : "Swift test file").")
+            }
             return
         }
         print("""
         Drives Xamine from scripts and AI agents. Xamine.app must have Accessibility and Screen Recording permission.
 
         Usage:
-          xamine <command> [value…] [--param value…] [--json] [--output file.png]
+          xamine <command> [value…] [--param value…] [--json] [--output file.png|file.swift]
           xamine mcp                 Run as an MCP server over stdio
           xamine help <command>      Show a command's parameters
 
@@ -124,6 +141,7 @@ enum CommandLineTool {
           xamine click e42
           xamine type-text e7 "reminders" && xamine press-key return
           xamine resolve-query 'app.windows["Shopping Cart"]'
+          xamine recording-stop --output UITests/OrderColdBrewTests.swift
         """)
     }
 }

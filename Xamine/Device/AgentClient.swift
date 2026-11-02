@@ -161,6 +161,7 @@ struct AgentNode: Decodable, Sendable {
         let screen = nodes.first?.frame ?? .zero
         var tree = UITree(nodes: nodes, appName: appName, bundleID: bundleID, platform: .iOSDevice, windowFrame: screen)
         if bundleID == "com.apple.springboard" { tree.moveWidgetContentsOntoTheScreen() }
+        tree.markGenericIdentifiers()
         return tree
     }
 }

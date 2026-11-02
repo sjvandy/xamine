@@ -20,7 +20,7 @@ extension AutomationService {
         switch method {
         case "status": return try await deviceStatus(device)
         case "list_apps": return try await deviceApps(device)
-        case "recording_stop":
+        case "recording_stop", "recording_last":
             var rest = params
             rest["device"] = nil
             return try await handle(method, params: rest)
@@ -199,7 +199,7 @@ extension AutomationService {
         let interactiveOnly = params["interactive_only"]?.bool ?? false
         var lines = [header(for: snapshot)]
         for node in tree.nodes where node.depth <= maxDepth {
-            if interactiveOnly, node.id != 0, !node.hasSelector, ![.control, .input, .link].contains(node.kind.category) { continue }
+            if interactiveOnly, node.id != 0, !node.isInteractive { continue }
             if lines.count > 2000 {
                 lines.append("… more. Use max_depth, interactive_only or find_elements.")
                 break
@@ -232,6 +232,7 @@ extension AutomationService {
             lines.append("\(describe(node, frames: true))\n    → \(query.replacingOccurrences(of: "\n    ", with: ""))")
             results.append(["ref": .string("e\(node.id)"), "type": .string(node.kind.typeName), "query": .string(query)])
         }
+        if matches.isEmpty { lines.append(AutomationHints.noMatchHint(device: device.name)) }
         return ["text": .string(lines.joined(separator: "\n")), "snapshotId": .number(Double(snapshot.id)), "elements": .array(results)]
     }
 
@@ -397,20 +398,35 @@ extension AutomationService {
             guard reply["met"]?.bool == true else {
                 throw Failure(code: "timeout", message: "\(target.query) \(gone ? "was still there" : "didn't appear") after \(Int(timeout))s." + (gone ? "" : " Use resolve_query with device to see why."))
             }
-            let code = recordOnDevice(.init(query: target.query, action: gone ? .assertGone(timeout: timeout) : .assertExists(timeout: timeout)), device: device, bundleID: bundleID)
+            // The agent proved the element exists; label and value are read from scans until they match.
+            let checks = gone ? [] : Self.attributeChecks(params)
+            let deadline = Date().addingTimeInterval(timeout)
+            while !checks.isEmpty {
+                let snapshot = try await scanDevice(device, bundleID: bundleID, client: client)
+                let node = QueryResolver(tree: snapshot.tree).resolve(target.steps).matches.first.map { snapshot.tree.node($0) }
+                if let node, checks.allSatisfy({ node.attribute($0.name) == $0.expected }) { break }
+                if Date() >= deadline {
+                    let mismatch = node.flatMap { node in checks.first { node.attribute($0.name) != $0.expected }.map { "\($0.name) is \(Self.quote(node.attribute($0.name) ?? "")), not \(Self.quote($0.expected))" } }
+                    throw Failure(code: "timeout", message: "\(target.query) was found, but its \(mismatch ?? "label or value didn't match") after \(Int(timeout))s.")
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+            let code = recordAssertion(query: target.query, gone: gone, checks: checks, timeout: timeout, bundleID: bundleID, deviceID: device.id, platform: .iOSDevice)
             return actionResult(gone ? "\(target.query) is gone." : "Found \(target.query).", code: code)
         }
         guard let text = params["text"]?.string, !text.isEmpty else { throw Failure(code: "invalidParams", message: "wait_for needs query or text.") }
         let deadline = Date().addingTimeInterval(timeout)
+        let checks = gone ? [] : Self.attributeChecks(params)
         while true {
             let snapshot = try await scanDevice(device, bundleID: bundleID, client: client)
             let found = snapshot.tree.nodes.first { node in
                 [node.identifier, node.title, node.label, node.value].contains { $0?.localizedCaseInsensitiveContains(text) == true }
+                    && checks.allSatisfy { node.attribute($0.name) == $0.expected }
             }
             if (found != nil) != gone {
                 let query = found.map { QueryBuilder(tree: snapshot.tree, includeAppDeclaration: false).bestQuery(for: $0.id) }
                     ?? "app.descendants(matching: .any).matching(NSPredicate(format: \(QueryBuilder.literal("label CONTAINS '" + text.replacingOccurrences(of: "'", with: "\\'") + "'")))).firstMatch"
-                let code = recordOnDevice(.init(query: query, action: gone ? .assertGone(timeout: timeout) : .assertExists(timeout: timeout)), device: device, bundleID: bundleID)
+                let code = recordAssertion(query: query, gone: gone, checks: checks, timeout: timeout, bundleID: bundleID, deviceID: device.id, platform: .iOSDevice)
                 return actionResult(gone ? "“\(text)” is gone." : "Found \(found.map { describe($0) } ?? text).", code: code)
             }
             if Date() >= deadline {
@@ -463,9 +479,7 @@ extension AutomationService {
         let builder = QueryBuilder(tree: snapshot.tree, includeAppDeclaration: false)
         let queries = builder.queries(for: id)
         var lines = ["\(describe(snapshot.tree.node(id)))", "Path: \(queries.breadcrumb)", "", "Best: \(builder.bestQuery(for: id))"]
-        for (title, snippet) in [("By identifier", queries.byIdentifier), ("From anchor", queries.fromAnchor),
-                                 (queries.containerIsEnclosing ? "Enclosing item (matches the whole item, not this element)" : "From container", queries.hasUniqueContainer ? queries.fromContainer : nil), ("By hierarchy (text-free)", queries.byHierarchy)] {
-            guard let snippet else { continue }
+        for (title, snippet) in builder.offeredQueries(for: id) {
             lines.append("\n\(title):\n\(snippet.code)")
             if let note = snippet.note { lines.append("  (\(note))") }
         }

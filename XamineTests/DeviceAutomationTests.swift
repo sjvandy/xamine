@@ -84,7 +84,7 @@ import Testing
             .init(query: #"app.textFields["name-field"]"#, action: .click),
             .init(query: #"app.textFields["name-field"]"#, action: .typeText("Sam")),
         ]
-        #expect(composer.source().components(separatedBy: "nameFieldTextField.tap()").count == 2) // exactly one tap
+        #expect(composer.source().components(separatedBy: "nameField.tap()").count == 2) // exactly one tap
     }
 
     @Test func symbolNamesAreNotKeysAndSelectionComesThrough() throws {

@@ -9,6 +9,8 @@ struct TestComposer: Sendable {
         case typeKey(key: String, modifiers: [String])
         case assertExists(timeout: Double)
         case assertGone(timeout: Double)
+        /// The element exists and its `label` or `value` equals the text.
+        case assertAttribute(name: String, expected: String, timeout: Double)
         /// iOS: a swipe in the finger's direction (`up`, `down`, `left`, `right`).
         case swipe(String)
         /// iOS: a hardware button (`home`, `volumeUp`, `volumeDown`), pressed through `XCUIDevice`.
@@ -45,6 +47,8 @@ struct TestComposer: Sendable {
         case .assertExists(let timeout): return "XCTAssertTrue(\(target).waitForExistence(timeout: \(format(timeout))))"
         case .assertGone(let timeout):
             return "XCTAssertTrue(\(target).waitForNonExistence(timeout: \(format(timeout))))"
+        case .assertAttribute(let name, let expected, let timeout):
+            return "XCTAssertTrue(\(target).waitForExistence(timeout: \(format(timeout))))\nXCTAssertEqual(\(target).\(name), \(QueryBuilder.literal(expected)))"
         }
     }
 
@@ -82,7 +86,7 @@ struct TestComposer: Sendable {
                     body.append(Self.line(for: Step(query: variable, action: .click), platform: platform))
                 }
                 body.append(Self.line(for: Step(query: variable, action: step.action), platform: platform))
-            case .typeKey, .assertExists, .assertGone, .deviceButton:
+            case .typeKey, .assertExists, .assertGone, .assertAttribute, .deviceButton:
                 body.append(Self.line(for: Step(query: names[query] ?? query, action: step.action), platform: platform))
             }
         }
@@ -134,10 +138,15 @@ struct TestComposer: Sendable {
         let typeWords = (ElementKind.knownTypeName(type)?.displayName ?? "Element")
             .split { !$0.isLetter }.map { $0.lowercased() }
 
-        var words: [String] = Array((key ?? "").split { !$0.isLetter && !$0.isNumber }.map { $0.lowercased() }.prefix(5))
-        // Don't repeat the type when the key already says it: "add-to-cart-button" + Button, "Search" + Search Field.
-        let overlap = (0...min(words.count, typeWords.count)).last { words.suffix($0).elementsEqual(typeWords.prefix($0)) } ?? 0
-        words.append(contentsOf: typeWords.dropFirst(overlap))
+        var words: [String] = Array((key ?? "").split { !$0.isLetter && !$0.isNumber }.map { $0.lowercased() }.prefix(4))
+        // Don't repeat the type when the key already says it: "add-to-cart-button" + Button, "Search" + Search Field, or
+        // "action-button-1" + Button. "Other" and "Element" say nothing, so they're never added.
+        let genericTypes: Set<String> = ["other", "element", "any"]
+        let head = typeWords.last ?? "element"
+        if words.isEmpty || (!genericTypes.contains(head) && !words.contains(head)) {
+            let overlap = (0...min(words.count, typeWords.count)).last { words.suffix($0).elementsEqual(typeWords.prefix($0)) } ?? 0
+            words.append(contentsOf: typeWords.dropFirst(overlap))
+        }
         var name = words.enumerated().map { $0.offset == 0 ? $0.element : $0.element.prefix(1).uppercased() + $0.element.dropFirst() }.joined()
         if let first = name.first, first.isNumber { name = "element" + name }
         return name.isEmpty ? "element" : name

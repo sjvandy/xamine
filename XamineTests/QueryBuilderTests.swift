@@ -57,7 +57,7 @@ private let tips = makeTree([
     @Test func disambiguatesDuplicateLabels() {
         let first = builder.identifierSnippet(for: sample.node(4))
         let second = builder.identifierSnippet(for: sample.node(6))
-        #expect(first?.code == #"app.buttons.matching(identifier: "Cancel").element(boundBy: 0)"#)
+        #expect(first?.code == #"app.buttons["Cancel"].firstMatch"#)
         #expect(second?.code == #"app.buttons.matching(identifier: "Cancel").element(boundBy: 1)"#)
         #expect(second?.note?.contains("2 buttons") == true)
     }

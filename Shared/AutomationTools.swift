@@ -57,7 +57,7 @@ enum Automation {
             Param(name: "window", kind: .string, description: "Part of the title of the window to scan, if not the front one."),
             Param(name: "max_depth", kind: .integer, description: "Only include elements up to this depth."),
             Param(name: "frames", kind: .boolean, description: "Include each element's frame in screen points."),
-            Param(name: "interactive_only", kind: .boolean, description: "Only list elements that have an identifier, title, label or value, plus controls."),
+            Param(name: "interactive_only", kind: .boolean, description: "Only list controls (buttons, switches, fields, sliders, links, keys) and rows that have a label or identifier; skips static text, images, scroll bars and unlabeled window controls."),
         ]),
         Tool(name: "find_elements", description: "Rescan the app and list elements whose identifier, title, label, value or placeholder contains the text, with the best XCUITest query for each.", params: [
             app, device,
@@ -87,24 +87,38 @@ enum Automation {
             Param(name: "direction", kind: .string, description: "up, down, left or right (default down)."),
             Param(name: "amount", kind: .integer, description: "Lines to scroll (default 5)."),
         ]),
-        Tool(name: "wait_for", description: "Wait until an XCUITest query (or any element containing text) exists, or is gone. Records an XCTAssert while recording.", params: [
+        Tool(name: "wait_for", description: "Wait until an XCUITest query (or any element containing text) exists, or is gone. Records an XCTAssert while recording. Add value or label to check what the element says, not just that it exists.", params: [
             app, device, query,
             Param(name: "text", kind: .string, description: "Text to wait for instead of a query."),
             Param(name: "timeout", kind: .number, description: "Seconds to wait (default 5)."),
             Param(name: "gone", kind: .boolean, description: "Wait for it to disappear instead."),
+            Param(name: "value", kind: .string, description: "Also wait until the element's value equals this exactly; records XCTAssertEqual(el.value, …)."),
+            Param(name: "label", kind: .string, description: "Also wait until the element's label equals this exactly; records XCTAssertEqual(el.label, …)."),
         ]),
         Tool(name: "resolve_query", description: "Evaluate an XCUITest query against the live UI. Reports how many elements match and, when none do, at which step the query stopped matching, the closest elements that exist now, and a text-free alternative query. Use it to find out why a UI test can't find an element. With device, the counts come from XCUITest itself.", params: [
             app, device,
-            Param(name: "query", kind: .string, description: #"The query, e.g. app.windows["Shopping Cart"] or app.buttons.matching(identifier: "save").firstMatch."#, required: true),
+            Param(name: "query", kind: .string, description: #"The query, e.g. app.windows["Shopping Cart"] or app.buttons["save"].firstMatch."#, required: true),
         ]),
         Tool(name: "recording_start", description: "Start recording: every click, type_text, press_key, scroll (device) and wait_for from now on is added to an XCUITest for that app (and device).", params: [
             app, device,
             Param(name: "name", kind: .string, description: "Name for the test, e.g. OrderColdBrew."),
         ]),
-        Tool(name: "recording_stop", description: "Stop recording and return the recorded steps as a complete XCTestCase source file.", params: []),
+        Tool(name: "recording_stop", description: "Stop recording and return the recorded steps as a complete XCTestCase source file. Fetch it again with recording_last. On the command line, --output file.swift saves it.", params: []),
+        Tool(name: "recording_last", description: "The most recent finished recording again (the XCTestCase source from recording_stop), e.g. if you didn't save it. On the command line, --output file.swift saves it.", params: []),
     ]
 
     static func tool(named name: String) -> Tool? {
         tools.first { $0.name == name || $0.cliName == name }
+    }
+}
+
+extension Automation {
+    /// Server messages name tools as MCP does (`recording_start`); on the command line they're commands (`recording-start`).
+    static func cliText(_ text: String) -> String {
+        var result = text
+        for tool in tools where tool.name != tool.cliName {
+            result = result.replacingOccurrences(of: tool.name, with: tool.cliName)
+        }
+        return result
     }
 }

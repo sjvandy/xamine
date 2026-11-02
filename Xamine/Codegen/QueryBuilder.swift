@@ -110,8 +110,17 @@ struct QueryBuilder {
         } else {
             // The subscript returns a single element, so duplicates need a query to index into.
             let index = matches.firstIndex(of: node.id) ?? 0
-            expression = "\(query).matching(identifier: \(Self.literal(key))).element(boundBy: \(index))"
+            // The first match reads better as `["Cart"].firstMatch` than as `.matching(identifier:).element(boundBy: 0)`.
+            expression = index == 0
+                ? "\(query)[\(Self.literal(key))].firstMatch"
+                : "\(query).matching(identifier: \(Self.literal(key))).element(boundBy: \(index))"
             note = [note, "\(matches.count) \(node.kind.displayName.lowercased())s share this key; using match \(index + 1)."]
+                .compactMap { $0 }.joined(separator: " ")
+        }
+        // The same key on elements of other types: harmless to this query, but a sign the identifier names a view type.
+        let kinds = Set(nodesInScope { $0.matchesIdentifier(key) }.map { tree.node($0).kind.displayName })
+        if kinds.count > 1 {
+            note = [note, "The key “\(key)” is also used by \(kinds.subtracting([node.kind.displayName]).sorted().joined(separator: ", ")) elements; it isn't unique to this element."]
                 .compactMap { $0 }.joined(separator: " ")
         }
         return Snippet(code: wrap(expression), note: note)
@@ -164,6 +173,49 @@ struct QueryBuilder {
     /// `row-12` → `row-#`: every run of digits becomes `#`.
     static func numberTemplate(_ identifier: String) -> String {
         identifier.replacingOccurrences(of: #"\d+"#, with: "#", options: .regularExpression)
+    }
+
+    // MARK: - Alternatives to offer
+
+    /// Longest text-free query worth offering; a SwiftUI screen's full path is 15 or more `.children` steps.
+    static let maxTextFreeSteps = 6
+
+    /// Element types whose text-free query proves nothing: `app.navigationBars.firstMatch` matches whichever screen is showing.
+    private static let weakKinds: Set<String> = ["window", "navigationBar", "tabBar", "toolbar", "statusBar", "application", "keyboard"]
+
+    /// How many `.children` or `containing` steps a query takes.
+    static func stepCount(_ code: String) -> Int {
+        code.components(separatedBy: ".children(matching:").count - 1 + code.components(separatedBy: ".containing(").count - 1
+    }
+
+    /// A query that finds the element by type and position only, so copy changes don't break it: from the closest
+    /// unique container if there is one, otherwise the full path. `nil` when it would be longer than
+    /// `maxTextFreeSteps`, or when the element is a bar or window that such a query can't tell apart.
+    func textFreeAlternative(for id: Int) -> String? {
+        guard !Self.weakKinds.contains(tree.node(id).kind.typeName) else { return nil }
+        let plain = QueryBuilder(tree: tree, includeAppDeclaration: false)
+        let generated = plain.queries(for: id)
+        let code = (generated.hasUniqueContainer && !generated.containerIsEnclosing ? generated.fromContainer : generated.byHierarchy).code
+        return Self.stepCount(code) <= Self.maxTextFreeSteps ? code : nil
+    }
+
+    /// The queries `get_queries` lists, in order, each with a title and note. Drops an anchored query that is no shorter
+    /// than the container one, and marks a hierarchy path that is long enough to be fragile.
+    func offeredQueries(for id: Int) -> [(title: String, snippet: Snippet)] {
+        let generated = queries(for: id)
+        var list: [(String, Snippet)] = []
+        if let byIdentifier = generated.byIdentifier { list.append(("By identifier", byIdentifier)) }
+        if let anchor = generated.fromAnchor, Self.stepCount(anchor.code) < Self.stepCount(generated.fromContainer.code) {
+            list.append(("From anchor", anchor))
+        }
+        if generated.hasUniqueContainer {
+            list.append((generated.containerIsEnclosing ? "Enclosing item (matches the whole item, not this element)" : "From container", generated.fromContainer))
+        }
+        let steps = Self.stepCount(generated.byHierarchy.code)
+        let weak = Self.weakKinds.contains(tree.node(id).kind.typeName)
+        let title = steps > Self.maxTextFreeSteps ? "By hierarchy (\(steps) steps, too fragile to recommend)" : (weak ? "By hierarchy" : "By hierarchy (text-free)")
+        list.append((title, generated.byHierarchy))
+        return list
     }
 
     // MARK: - By hierarchy

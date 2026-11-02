@@ -26,6 +26,9 @@ struct UINode: Identifiable, Hashable, Sendable {
     var isEnabled: Bool?
     /// Selected state from XCUITest (iOS): a chosen segment, tab or row.
     var isSelected: Bool? = nil
+    /// Set by `UITree.markGenericIdentifiers()` when many elements share `identifier` (`label-view`), which makes it a
+    /// type of view rather than a name for this element.
+    var hasGenericIdentifier = false
 
     /// The most stable string to look this element up by with XCUITest's subscript or `matching(identifier:)`:
     /// identifier, then title, label, value and placeholder. Long, multi-line or numeric values are skipped, since
@@ -42,6 +45,7 @@ struct UINode: Identifiable, Hashable, Sendable {
         // An SF Symbol name (`bag`, `cup.and.saucer`) is the icon an element shows, not an identifier anyone set; it
         // changes with state (`bag.fill`), so the label is the better key.
         if Self.isSymbolName(identifier) { return nil }
+        if hasGenericIdentifier { return nil }
         return identifier
     }
 
@@ -85,6 +89,27 @@ struct UINode: Identifiable, Hashable, Sendable {
 
     var hasSelector: Bool { bestKey != nil }
 
+    /// `label` or `value`, for checking what an element says.
+    func attribute(_ name: String) -> String? { name == "value" ? value : label }
+
+    /// Whether `snapshot --interactive-only` lists this element: controls, fields and links, and items someone can
+    /// name. Static text, images, scroll bars and unlabeled chrome (the window's close, minimize and zoom buttons) are noise.
+    var isInteractive: Bool {
+        if isScrollIndicator { return false }
+        switch kind.category {
+        case .input, .link:
+            return true
+        case .control:
+            if ["AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton"].contains(subrole) { return false }
+            // A button with nothing to identify it can't be targeted by a test, only by position.
+            return hasSelector || !["button", "image", "other"].contains(kind.typeName)
+        case .collection:
+            return ["cell", "tableRow", "outlineRow"].contains(kind.typeName) && hasSelector
+        default:
+            return false
+        }
+    }
+
     /// A scroll indicator on iOS ("Vertical scroll bar, 1 page"): an `other` the system draws over scrolling content.
     /// It overlaps the real elements, so it's never what someone is pointing at.
     var isScrollIndicator: Bool {
@@ -113,6 +138,22 @@ struct UITree: Sendable {
     var root: UINode? { nodes.first }
 
     func node(_ id: Int) -> UINode { nodes[id] }
+
+    /// Flags identifiers that many elements share. SwiftUI gives every text its view's name (`label-view`), so such an
+    /// identifier says what kind of view it is, not which one; it's no use as a key. Four or more elements, or three of
+    /// more than one type, count as many.
+    mutating func markGenericIdentifiers() {
+        var counts: [String: (count: Int, types: Set<String>)] = [:]
+        for node in nodes {
+            guard let identifier = node.identifier.nonEmpty else { continue }
+            counts[identifier, default: (0, [])].count += 1
+            counts[identifier]?.types.insert(node.kind.typeName)
+        }
+        for index in nodes.indices {
+            guard let identifier = nodes[index].identifier.nonEmpty, let entry = counts[identifier] else { continue }
+            nodes[index].hasGenericIdentifier = entry.count >= 4 || (entry.count >= 3 && entry.types.count >= 2)
+        }
+    }
 
     func children(of id: Int) -> [UINode] { nodes[id].childIDs.map { nodes[$0] } }
 

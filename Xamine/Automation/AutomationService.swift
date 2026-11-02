@@ -33,6 +33,8 @@ final class AutomationService {
     var nextSnapshotID = 1
     private var currentBundleID: String?
     var recording: TestComposer?
+    /// The last finished recording, so `recording_last` can return it again.
+    var lastRecording: (fileName: String, source: String, steps: Int)?
     /// The device a recording belongs to, or `nil` for a Mac app.
     var recordingDeviceID: String?
     /// The latest snapshot of each app on each device, keyed by "deviceID/bundleID".
@@ -95,6 +97,7 @@ final class AutomationService {
         case "resolve_query": return try await resolveQuery(params)
         case "recording_start": return try recordingStart(params)
         case "recording_stop": return try recordingStop()
+        case "recording_last": return try recordingLast()
         default: throw Failure(code: "unknownMethod", message: "Unknown method \(method).")
         }
     }
@@ -142,6 +145,7 @@ final class AutomationService {
     private func launchApp(_ params: [String: JSONValue]) async throws -> JSONValue {
         guard let name = params["app"]?.string, !name.isEmpty else { throw Failure(code: "invalidParams", message: "launch_app needs app.") }
         var notes: [String] = []
+        var warnings: [String] = [] // printed before the "Launched…" line, where they're seen
         let url: URL
         if name.hasSuffix(".app") || name.hasPrefix("/") || name.hasPrefix("~") {
             url = URL(fileURLWithPath: (name as NSString).expandingTildeInPath)
@@ -156,7 +160,7 @@ final class AutomationService {
             if let newest = copies.max(by: { Self.buildDate($0) < Self.buildDate($1) }) {
                 url = newest
                 if copies.count > 1 {
-                    notes.append("\(copies.count) copies of \(name) are installed; opened the most recently built. Pass a path to choose another:\n"
+                    warnings.append("\(copies.count) copies of \(name) are installed; opened the most recently built. Pass a path to choose another:\n"
                         + copies.map { "  \($0.path) (built \(Self.buildDate($0).formatted(date: .abbreviated, time: .shortened)))" }.joined(separator: "\n"))
                 }
             } else if let found = Self.findApplication(named: name) {
@@ -170,7 +174,7 @@ final class AutomationService {
         let bundleID = Bundle(url: url)?.bundleIdentifier
         if let bundleID, let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .first(where: { $0.bundleURL?.standardizedFileURL != url.standardizedFileURL }), let otherPath = other.bundleURL?.path {
-            notes.append("Warning: another copy is running from \(otherPath). Quit it (or pass its path) so you inspect the build you mean.")
+            warnings.append("Warning: another copy is running from \(otherPath). Quit it (or pass its path) so you inspect the build you mean.")
         }
 
         let configuration = NSWorkspace.OpenConfiguration()
@@ -192,7 +196,7 @@ final class AutomationService {
         let summary = window.map { "Launched \(appName) (\(launchedID)) from \(path); front window “\($0.title ?? "")”." }
             ?? "Launched \(appName) (\(launchedID)) from \(path), but no window appeared yet."
         return [
-            "text": .string(([summary] + notes).joined(separator: "\n")),
+            "text": .string((warnings + [summary] + notes).joined(separator: "\n")),
             "bundleId": .string(launchedID),
             "path": .string(path),
             "window": .string(window?.title ?? ""),
@@ -251,7 +255,7 @@ final class AutomationService {
         }
     }
 
-    private func scan(_ params: [String: JSONValue]) async throws -> Snapshot {
+    private func scan(_ params: [String: JSONValue], store: Bool = true) async throws -> Snapshot {
         try requireAccessibility()
         let app = try resolveApp(params)
         guard let bundleID = app.bundleIdentifier else { throw Failure(code: "noApp", message: "The app has no bundle ID.") }
@@ -271,7 +275,7 @@ final class AutomationService {
             let (tree, elements) = try await scanRetrying(window)
             let snapshot = Snapshot(id: nextSnapshotID, tree: tree, elements: elements, target: window)
             nextSnapshotID += 1
-            snapshots[bundleID] = snapshot
+            if store { snapshots[bundleID] = snapshot }
             return snapshot
         } catch {
             throw Failure(code: "scanFailed", message: error.localizedDescription)
@@ -301,7 +305,7 @@ final class AutomationService {
         let limit = 2000
         var shown = 0
         for node in tree.nodes where node.depth <= maxDepth {
-            if interactiveOnly, node.id != 0, !node.hasSelector, ![.control, .input, .link].contains(node.kind.category) { continue }
+            if interactiveOnly, node.id != 0, !node.isInteractive { continue }
             if shown == limit {
                 lines.append("… \(tree.nodes.count - limit) more. Use max_depth, interactive_only or find_elements.")
                 break
@@ -322,7 +326,7 @@ final class AutomationService {
     private func header(for snapshot: Snapshot) -> String {
         let app = NSRunningApplication(processIdentifier: snapshot.tree.pid)
         let copies = snapshot.tree.bundleID.map { NSRunningApplication.runningApplications(withBundleIdentifier: $0).count } ?? 1
-        var header = "\(snapshot.tree.appName) (\(snapshot.tree.bundleID ?? "?")) — window “\(snapshot.target.title ?? "")” — snapshot \(snapshot.id), \(snapshot.tree.nodes.count) elements"
+        var header = "\(snapshot.tree.appName) (\(snapshot.tree.bundleID ?? "?")) — \(AutomationHints.windowDescription(title: snapshot.target.title, kind: snapshot.tree.root?.kind.typeName)) — snapshot \(snapshot.id), \(snapshot.tree.nodes.count) elements"
         if let path = app?.bundleURL?.path { header += "\nApp: \(path)" }
         if copies > 1 { header += "\nWarning: \(copies) copies of this app are running; this is the one whose window is in front." }
         return header
@@ -371,13 +375,16 @@ final class AutomationService {
             lines.append("\(describe(node, frames: true))\n    → \(query.replacingOccurrences(of: "\n    ", with: ""))")
             results.append(["ref": .string("e\(node.id)"), "type": .string(node.kind.typeName), "query": .string(query)])
         }
+        if matches.isEmpty { lines.append(AutomationHints.noMatchHint(device: nil)) }
         return ["text": .string(lines.joined(separator: "\n")), "snapshotId": .number(Double(snapshot.id)), "elements": .array(results)]
     }
 
     // MARK: - Targets
 
     /// The element named by `element` (a ref into the app's latest snapshot) or `query` (resolved on a fresh scan).
-    private func target(_ params: [String: JSONValue], required: Bool = true) async throws -> Target? {
+    /// With `fresh`, a ref is looked up again in a new scan by its query, so an action lands where the element is now;
+    /// refs in the agent's snapshot stay as they were.
+    private func target(_ params: [String: JSONValue], required: Bool = true, fresh: Bool = false) async throws -> Target? {
         if let ref = params["element"]?.string, !ref.isEmpty {
             let app = try resolveApp(params)
             guard let bundleID = app.bundleIdentifier, let snapshot = snapshots[bundleID] else {
@@ -387,7 +394,14 @@ final class AutomationService {
                 throw Failure(code: "elementNotFound", message: "No element \(ref) in snapshot \(snapshot.id).")
             }
             let builder = QueryBuilder(tree: snapshot.tree, includeAppDeclaration: false)
-            return Target(snapshot: snapshot, nodeID: id, query: builder.bestQuery(for: id))
+            guard fresh else { return Target(snapshot: snapshot, nodeID: id, query: builder.bestQuery(for: id)) }
+            let current = try await scan(params, store: false)
+            switch AutomationHints.resolveStaleRef(id: id, oldTree: snapshot.tree, newTree: current.tree) {
+            case .found(let match):
+                return Target(snapshot: current, nodeID: match, query: builder.bestQuery(for: id))
+            case .changed(let query):
+                throw Failure(code: "snapshotChanged", message: "\(ref) (\(describe(snapshot.tree.node(id)))) isn't there any more: the UI changed since snapshot \(snapshot.id), and \(query) no longer finds exactly one element. Take a new snapshot, or pass a query.")
+            }
         }
         if let query = params["query"]?.string, !query.isEmpty {
             let steps = try parse(query)
@@ -439,7 +453,7 @@ final class AutomationService {
 
     private func click(_ params: [String: JSONValue]) async throws -> JSONValue {
         try requireAccessibility()
-        guard let target = try await target(params) else { return .null }
+        guard let target = try await target(params, fresh: true) else { return .null }
         let method = params["method"]?.string ?? "auto"
         let element = target.element
         let rowKinds: Set<String> = ["outlineRow", "tableRow", "cell"]
@@ -467,7 +481,7 @@ final class AutomationService {
     private func typeText(_ params: [String: JSONValue]) async throws -> JSONValue {
         try requireAccessibility()
         guard let text = params["text"]?.string else { throw Failure(code: "invalidParams", message: "type_text needs text.") }
-        let target = try await target(params, required: false)
+        let target = try await target(params, required: false, fresh: true)
         let app = try target.map { NSRunningApplication(processIdentifier: $0.snapshot.tree.pid) } ?? resolveApp(params)
         guard let pid = app?.processIdentifier else { throw Failure(code: "noApp", message: "The app isn't running.") }
 
@@ -514,7 +528,7 @@ final class AutomationService {
 
     private func scroll(_ params: [String: JSONValue]) async throws -> JSONValue {
         try requireAccessibility()
-        let target = try await target(params, required: false)
+        let target = try await target(params, required: false, fresh: true)
         let snapshot: Snapshot
         if let target { snapshot = target.snapshot } else { snapshot = try await scan(params) }
         guard let frame = target.flatMap(liveFrame) ?? snapshot.target.bounds as CGRect? else {
@@ -534,6 +548,24 @@ final class AutomationService {
         return ["text": .string("Scrolled \(what) \(direction) by \(amount). XCUITest scrolls to elements automatically when clicking them, so this isn't recorded.")]
     }
 
+    /// The `value` and `label` a `wait_for` call wants the element to have.
+    nonisolated static func attributeChecks(_ params: [String: JSONValue]) -> [(name: String, expected: String)] {
+        ["value", "label"].compactMap { name in params[name]?.string.map { (name, $0) } }
+    }
+
+    /// Records what `wait_for` proved and returns the XCUITest for it: existence, absence, or that the label or value matched.
+    func recordAssertion(query: String, gone: Bool, checks: [(name: String, expected: String)], timeout: Double,
+                         bundleID: String?, deviceID: String? = nil, platform: TargetPlatform = .macOS) -> String {
+        if gone || checks.isEmpty {
+            return record(.init(query: query, action: gone ? .assertGone(timeout: timeout) : .assertExists(timeout: timeout)),
+                          bundleID: bundleID, deviceID: deviceID, platform: platform)
+        }
+        return checks.map { check in
+            record(.init(query: query, action: .assertAttribute(name: check.name, expected: check.expected, timeout: timeout)),
+                   bundleID: bundleID, deviceID: deviceID, platform: platform)
+        }.joined(separator: "\n")
+    }
+
     private func waitFor(_ params: [String: JSONValue]) async throws -> JSONValue {
         try requireAccessibility()
         let query = params["query"]?.string.flatMap { $0.isEmpty ? nil : $0 }
@@ -542,7 +574,9 @@ final class AutomationService {
         let steps = try query.map(parse)
         let timeout = params["timeout"]?.double ?? 5
         let gone = params["gone"]?.bool ?? false
+        let checks = Self.attributeChecks(params)
         let deadline = Date().addingTimeInterval(timeout)
+        var actual: String?
 
         while true {
             let snapshot = try await scan(params)
@@ -553,18 +587,23 @@ final class AutomationService {
                     [node.identifier, node.title, node.label, node.value].contains { $0?.localizedCaseInsensitiveContains(text!) == true }
                 }?.id
             }
-            if (found != nil) != gone {
+            let node = found.map { snapshot.tree.node($0) }
+            if let node, let check = checks.first(where: { node.attribute($0.name) != $0.expected }) {
+                actual = "\(check.name) is \(Self.quote(node.attribute(check.name) ?? "")), not \(Self.quote(check.expected))"
+            }
+            let met = gone ? found == nil : (found != nil && checks.allSatisfy { node?.attribute($0.name) == $0.expected })
+            if met {
                 let builder = QueryBuilder(tree: snapshot.tree, includeAppDeclaration: false)
                 let recordedQuery = query.map(Self.trimmed)
                     ?? found.map { builder.bestQuery(for: $0) }
                     ?? "app.descendants(matching: .any).matching(NSPredicate(format: \(QueryBuilder.literal("label CONTAINS " + Self.predicateLiteral(text!))))).firstMatch"
-                let code = record(.init(query: recordedQuery, action: gone ? .assertGone(timeout: timeout) : .assertExists(timeout: timeout)),
-                                  bundleID: snapshot.tree.bundleID)
+                let code = recordAssertion(query: recordedQuery, gone: gone, checks: checks, timeout: timeout, bundleID: snapshot.tree.bundleID)
                 let what = found.map { describe(snapshot.tree.node($0)) } ?? (query ?? text!)
                 return actionResult(gone ? "\(what) is gone." : "Found \(what).", code: code)
             }
             if Date() >= deadline {
-                throw Failure(code: "timeout", message: "\(query ?? "“\(text!)”") \(gone ? "was still there" : "didn't appear") after \(timeout)s." + (query != nil && !gone ? " Use resolve_query to see why." : ""))
+                let reason = gone ? "was still there" : (actual.map { "was found, but its \($0)," } ?? "didn't appear")
+                throw Failure(code: "timeout", message: "\(query ?? "“\(text!)”") \(reason) after \(timeout)s." + (query != nil && !gone && actual == nil ? " Use resolve_query to see why." : ""))
             }
             try? await Task.sleep(for: .milliseconds(400))
         }
@@ -603,7 +642,7 @@ final class AutomationService {
             throw Failure(code: "captureFailed", message: error.localizedDescription)
         }
         var image = capture.image
-        var described = "window “\(picked.title ?? "")”"
+        var described = AutomationHints.windowDescription(title: picked.title, kind: nil)
         if let target, let frame = liveFrame(target) {
             let scale = CGFloat(image.width) / capture.frame.width
             let local = frame.offsetBy(dx: -capture.frame.minX, dy: -capture.frame.minY).insetBy(dx: -8, dy: -8)
@@ -635,10 +674,7 @@ final class AutomationService {
             lines.append("\(title):\n\(snippet.code)")
             if let note = snippet.note { lines.append("  (\(note))") }
         }
-        add("By identifier", queries.byIdentifier)
-        add("From anchor", queries.fromAnchor)
-        if queries.hasUniqueContainer { add(queries.containerIsEnclosing ? "Enclosing item (matches the whole item, not this element)" : "From container", queries.fromContainer) }
-        add("By hierarchy (text-free)", queries.byHierarchy)
+        for (title, snippet) in builder.offeredQueries(for: target.nodeID) { add(title, snippet) }
         return [
             "text": .string(lines.joined(separator: "\n")),
             "best": .string(builder.bestQuery(for: target.nodeID)),
@@ -702,11 +738,11 @@ final class AutomationService {
             func add(_ id: Int) {
                 let node = tree.node(id)
                 let best = builder.bestQuery(for: id).replacingOccurrences(of: "\n    ", with: "")
-                let free = textFreeQuery(for: id, builder: builder)
+                let free = builder.textFreeAlternative(for: id)?.replacingOccurrences(of: "\n    ", with: "")
                 lines.append("  \(describe(node))\(key != nil ? String(format: "  (similarity %.2f)", score(id)) : "")")
                 lines.append("    query:     \(best)")
-                lines.append("    text-free: \(free)")
-                candidates.append(["ref": .string("e\(id)"), "query": .string(best), "textFree": .string(free), "similarity": .number(score(id))])
+                if let free { lines.append("    text-free: \(free)") }
+                candidates.append(["ref": .string("e\(id)"), "query": .string(best), "textFree": free.map { .string($0) } ?? .null, "similarity": .number(score(id))])
             }
 
             // What the failing step chose from: the same kind of element in the same place, which is usually the one
@@ -727,6 +763,10 @@ final class AutomationService {
                     elsewhere.forEach(add)
                 }
             }
+            if let hint = AutomationHints.tabBarHint(steps: steps, tree: tree) {
+                lines.append("")
+                lines.append(hint)
+            }
             if let first = pool.first, ["window", "navigationBar"].contains(tree.node(first).kind.typeName) {
                 lines.append("")
                 lines.append("Titles come from the screen's navigation title. To check that navigation worked without pinning the title's text, assert an element that only the destination screen has; a “title isn't empty” check passes even if nothing changed.")
@@ -739,15 +779,6 @@ final class AutomationService {
             "matches": .array(resolution.matches.prefix(10).map { .string("e\($0)") }),
             "candidates": .array(candidates),
         ]
-    }
-
-    /// A query that finds the element by type and position only, so copy changes don't break it: from the closest
-    /// unique container if there is one, otherwise the full path.
-    func textFreeQuery(for id: Int, builder: QueryBuilder) -> String {
-        let queries = builder.queries(for: id)
-        if builder.tree.node(id).kind.typeName == "window" { return "app.windows.firstMatch" }
-        return (queries.hasUniqueContainer && !queries.containerIsEnclosing ? queries.fromContainer : queries.byHierarchy).code
-            .replacingOccurrences(of: "\n    ", with: "")
     }
 
     static func isBoundBy(_ operation: QueryResolver.Operation) -> Bool {
@@ -766,14 +797,25 @@ final class AutomationService {
     }
 
     private func recordingStop() throws -> JSONValue {
-        guard let composer = recording else { throw Failure(code: "notRecording", message: "Nothing is being recorded. Call recording_start first.") }
+        guard let composer = recording else {
+            throw Failure(code: "notRecording", message: "Nothing is being recorded. Call recording_start first" + (lastRecording != nil ? ", or recording_last for the previous recording." : "."))
+        }
         recording = nil
         let source = composer.source()
-        let fileName = "\(composer.name)Tests.swift"
-        return [
-            "text": .string("// \(fileName) — \(composer.steps.count) recorded steps\n\(source)"),
-            "source": .string(source),
-            "fileName": .string(fileName),
+        lastRecording = (fileName: "\(composer.name)Tests.swift", source: source, steps: composer.steps.count)
+        return recordingResult(lastRecording!)
+    }
+
+    private func recordingLast() throws -> JSONValue {
+        guard let last = lastRecording else { throw Failure(code: "notRecording", message: "There's no finished recording yet. Call recording_start, then recording_stop.") }
+        return recordingResult(last)
+    }
+
+    private func recordingResult(_ recording: (fileName: String, source: String, steps: Int)) -> JSONValue {
+        [
+            "text": .string("// \(recording.fileName) — \(recording.steps) recorded steps\n\(recording.source)"),
+            "source": .string(recording.source),
+            "fileName": .string(recording.fileName),
         ]
     }
 }
