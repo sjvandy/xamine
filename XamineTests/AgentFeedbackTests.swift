@@ -120,7 +120,7 @@ private func makeTree(_ specs: [(parent: Int?, type: String, identifier: String?
         let label = TestComposer.line(for: .init(query: #"app.staticTexts["Total"]"#, action: .assertAttribute(name: "label", expected: "$12.50", timeout: 5)), platform: .iOSDevice)
         #expect(label == "XCTAssertTrue(app.staticTexts[\"Total\"].waitForExistence(timeout: 5))\nXCTAssertEqual(app.staticTexts[\"Total\"].label, \"$12.50\")")
         let value = TestComposer.line(for: .init(query: #"app.switches["Extra shot"]"#, action: .assertAttribute(name: "value", expected: "1", timeout: 3)))
-        #expect(value.hasSuffix(#"XCTAssertEqual(app.switches["Extra shot"].value, "1")"#))
+        #expect(value.hasSuffix(#"XCTAssertEqual(app.switches["Extra shot"].value as? String, "1")"#))
     }
 
     @Test func sourceReusesTheVariableForAnAssertion() {
@@ -133,7 +133,7 @@ private func makeTree(_ specs: [(parent: Int?, type: String, identifier: String?
 
     @Test func escapesTheExpectedText() {
         let line = TestComposer.line(for: .init(query: "app.staticTexts.firstMatch", action: .assertAttribute(name: "value", expected: #"say "hi""#, timeout: 5)))
-        #expect(line.contains(#".value, "say \"hi\"")"#))
+        #expect(line.contains(#".value as? String, "say \"hi\"")"#))
     }
 
     @Test func checksComeFromParams() {

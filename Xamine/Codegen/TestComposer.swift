@@ -48,7 +48,7 @@ struct TestComposer: Sendable {
         case .assertGone(let timeout):
             return "XCTAssertTrue(\(target).waitForNonExistence(timeout: \(format(timeout))))"
         case .assertAttribute(let name, let expected, let timeout):
-            return "XCTAssertTrue(\(target).waitForExistence(timeout: \(format(timeout))))\nXCTAssertEqual(\(target).\(name), \(QueryBuilder.literal(expected)))"
+            return "XCTAssertTrue(\(target).waitForExistence(timeout: \(format(timeout))))\nXCTAssertEqual(\(target).\(name == "value" ? "value as? String" : name), \(QueryBuilder.literal(expected)))"
         }
     }
 
