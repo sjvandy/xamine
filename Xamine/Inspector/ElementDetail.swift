@@ -24,7 +24,7 @@ struct ElementDetail: View {
                         emptyMessage: "",
                         copy: { model.copy($0, message: "Copied container query") }
                     )
-                    .help("Hierarchy steps from the closest container whose type appears once in the window. Indexes count siblings of the same type; XCTest sometimes skips accessibility nodes the raw tree shows.")
+                    .help("Hierarchy steps from the closest container whose type appears once in the window. Indexes count siblings of the same type; XCTest sometimes skips accessibility nodes the raw tree shows. When the element sits in a numbered item with the same bounds (a result cell, a list row), this is that item's own query.")
                     CommandCard(
                         title: "From identified anchor",
                         symbol: "scope",

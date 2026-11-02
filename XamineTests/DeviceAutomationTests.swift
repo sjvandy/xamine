@@ -294,3 +294,68 @@ import Testing
         #expect(tree.nodes.first { $0.label == "Weekly Check-In" }!.frame == CGRect(x: 43, y: 725, width: 128, height: 20))
     }
 }
+
+/// Spotlight's result cells: numbered identifiers whose hit box is the same as the icon's inside them.
+@Suite struct EnclosingItemTests {
+    private func tree(_ cellFrame: String = "[204,154,78,91]") -> UITree {
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"collectionView","frame":[14,128,375,404],"children":[
+            {"type":"cell","frame":[40,154,78,91],"identifier":"Identifier:ResultCell,Section:0,Row:0","label":"Mail","children":[
+              {"type":"icon","frame":[40,154,78,91],"identifier":"Mail","label":"Mail","children":[]}]},
+            {"type":"cell","frame":\(cellFrame),"identifier":"Identifier:ResultCell,Section:0,Row:3","label":"Instagram","children":[
+              {"type":"other","frame":[211,156,64,78],"children":[
+                {"type":"icon","frame":[204,154,78,91],"identifier":"Instagram","label":"Instagram","children":[]}]}]},
+            {"type":"cell","frame":[14,283,375,56],"identifier":"Identifier:ResultCell,Section:1,Row:0","label":"Chiefs vs Broncos","children":[]}]}]}]}
+        """.utf8))
+        return root.makeTree(appName: "Spotlight", bundleID: "com.apple.campo")
+    }
+
+    @Test func theContainerQueryIsTheNumberedCellWithTheSameHitBox() {
+        let tree = tree()
+        let icon = tree.nodes.first { $0.identifier == "Instagram" }!
+        let builder = QueryBuilder(tree: tree, includeAppDeclaration: false)
+        let queries = builder.queries(for: icon.id)
+        #expect(queries.byIdentifier?.code == #"app.icons["Instagram"]"#)
+        #expect(queries.fromContainer.code == #"app.cells["Identifier:ResultCell,Section:0,Row:3"]"#)
+        #expect(queries.hasUniqueContainer)
+        #expect(queries.containerIsEnclosing)
+        // It names a different element, so it is never offered as the way to find this one.
+        #expect(builder.bestQuery(for: icon.id) == #"app.icons["Instagram"]"#)
+    }
+
+    @Test func aCellMuchBiggerThanTheElementIsNotItsItem() {
+        // The cell is a full-width row; the icon in it is a small part of it, not the same hit box.
+        let tree = tree("[14,150,375,100]")
+        let icon = tree.nodes.first { $0.identifier == "Instagram" }!
+        #expect(!QueryBuilder(tree: tree, includeAppDeclaration: false).queries(for: icon.id).containerIsEnclosing)
+    }
+
+    @Test func anIdentifierWithoutASequenceIsNotAnItem() {
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"cell","frame":[0,0,100,100],"identifier":"SpotlightPromptContainer","children":[
+            {"type":"button","frame":[0,0,100,100],"label":"Go","children":[]}]}]}]}
+        """.utf8))
+        let tree = root.makeTree(appName: "x", bundleID: "x")
+        let button = tree.nodes.first { $0.label == "Go" }!
+        #expect(!QueryBuilder(tree: tree, includeAppDeclaration: false).queries(for: button.id).containerIsEnclosing)
+    }
+
+    @Test func numberTemplatesFindSequencesAnywhereInTheIdentifier() {
+        #expect(QueryBuilder.numberTemplate("Identifier:ResultCell,Section:0,Row:3") == "Identifier:ResultCell,Section:#,Row:#")
+        #expect(QueryBuilder.numberTemplate("row-12") == "row-#")
+        #expect(QueryBuilder.numberTemplate("tile_7_large") == "tile_#_large")
+        #expect(QueryBuilder.numberTemplate("sidebar-cart") == "sidebar-cart")
+        // A single numbered cell in its own section still matches its siblings in other sections.
+        #expect(QueryBuilder.numberTemplate("…Section:1,Row:0") == QueryBuilder.numberTemplate("…Section:0,Row:3"))
+    }
+
+    @Test func overlapMeasuresTheSharedHitBox() {
+        let a = CGRect(x: 0, y: 0, width: 100, height: 100)
+        #expect(QueryBuilder.overlap(a, a) == 1)
+        #expect(QueryBuilder.overlap(a, CGRect(x: 0, y: 0, width: 50, height: 100)) == 0.5)
+        #expect(QueryBuilder.overlap(a, CGRect(x: 200, y: 200, width: 10, height: 10)) == 0)
+        #expect(QueryBuilder.overlap(a, CGRect(x: 1, y: 1, width: 98, height: 98)) > QueryBuilder.sameHitBox)
+    }
+}

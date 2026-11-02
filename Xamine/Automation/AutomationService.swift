@@ -637,7 +637,7 @@ final class AutomationService {
         }
         add("By identifier", queries.byIdentifier)
         add("From anchor", queries.fromAnchor)
-        if queries.hasUniqueContainer { add("From container", queries.fromContainer) }
+        if queries.hasUniqueContainer { add(queries.containerIsEnclosing ? "Enclosing item (matches the whole item, not this element)" : "From container", queries.fromContainer) }
         add("By hierarchy (text-free)", queries.byHierarchy)
         return [
             "text": .string(lines.joined(separator: "\n")),
@@ -746,7 +746,8 @@ final class AutomationService {
     func textFreeQuery(for id: Int, builder: QueryBuilder) -> String {
         let queries = builder.queries(for: id)
         if builder.tree.node(id).kind.typeName == "window" { return "app.windows.firstMatch" }
-        return (queries.hasUniqueContainer ? queries.fromContainer : queries.byHierarchy).code.replacingOccurrences(of: "\n    ", with: "")
+        return (queries.hasUniqueContainer && !queries.containerIsEnclosing ? queries.fromContainer : queries.byHierarchy).code
+            .replacingOccurrences(of: "\n    ", with: "")
     }
 
     static func isBoundBy(_ operation: QueryResolver.Operation) -> Bool {

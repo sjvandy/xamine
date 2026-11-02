@@ -176,6 +176,7 @@ enum AgentIntegration {
     - Actions run as real XCUITest calls on the device: `click` taps, `scroll` swipes (scrolling down swipes up), `press_key` handles `home`, `return`, `delete` and characters. `resolve_query` counts matches with XCUITest itself.
     - Recordings produce iOS code (`.tap()`, a tap before `typeText`, `swipeUp()`, `XCUIDevice.shared.press(.home)`). If tapping a switch's row doesn't toggle it, Xamine taps the switch inside and records `….switches.firstMatch.tap()`; keep that.
     - Spotlight (swipe down on the Home Screen) is its own app, `com.apple.campo`; pass `app: "com.apple.campo"` to read its results and keyboard. SpringBoard's tree doesn't contain them, only the Home Screen beneath.
+    - For an element inside a numbered item (`Identifier:ResultCell,Section:0,Row:3`) with the same bounds, `get_queries` lists an "Enclosing item" query for the whole cell. Use that for "the fourth result"; it matches the cell, not the icon inside it.
     - Lists load lazily: rows below the fold aren't in a snapshot until you `scroll`. If `find_elements` finds nothing, scroll and look again.
     - iPhone and iPad layouts differ. On iPad (iOS 18+) tabs sit in a floating bar at the top that isn't a `tabBar`, so `app.tabBars.buttons["Cart"]` fails there; `app.buttons["Cart"].firstMatch` works on both. Check tests on each device family they must run on.
     - Snapshots show `[selected]` for the chosen segment or tab, and screenshots are in pixels (2× or 3× the snapshot's points).

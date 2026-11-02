@@ -365,7 +365,8 @@ final class InspectorModel {
         guard id != nil, let queries = selectedQueries else { return }
         if let byIdentifier = queries.byIdentifier {
             copy(byIdentifier.code, message: "Copied identifier query")
-        } else if queries.hasUniqueContainer {
+        } else if queries.hasUniqueContainer && !queries.containerIsEnclosing {
+            // An enclosing item's query matches the item, not this element, so it's never copied on its own.
             copy(queries.fromContainer.code, message: "Copied container query")
         } else if let fromAnchor = queries.fromAnchor {
             copy(fromAnchor.code, message: "Copied anchored query")

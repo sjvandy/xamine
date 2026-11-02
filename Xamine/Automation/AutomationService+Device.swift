@@ -464,7 +464,7 @@ extension AutomationService {
         let queries = builder.queries(for: id)
         var lines = ["\(describe(snapshot.tree.node(id)))", "Path: \(queries.breadcrumb)", "", "Best: \(builder.bestQuery(for: id))"]
         for (title, snippet) in [("By identifier", queries.byIdentifier), ("From anchor", queries.fromAnchor),
-                                 ("From container", queries.hasUniqueContainer ? queries.fromContainer : nil), ("By hierarchy (text-free)", queries.byHierarchy)] {
+                                 (queries.containerIsEnclosing ? "Enclosing item (matches the whole item, not this element)" : "From container", queries.hasUniqueContainer ? queries.fromContainer : nil), ("By hierarchy (text-free)", queries.byHierarchy)] {
             guard let snippet else { continue }
             lines.append("\n\(title):\n\(snippet.code)")
             if let note = snippet.note { lines.append("  (\(note))") }

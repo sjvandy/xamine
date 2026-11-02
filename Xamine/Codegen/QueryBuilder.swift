@@ -28,6 +28,9 @@ struct GeneratedQueries: Equatable, Sendable {
     var fromContainer: Snippet
     /// False when no container type is unique and `fromContainer` is just the full path.
     var hasUniqueContainer: Bool
+    /// True when `fromContainer` is the query for the item holding the element (a numbered cell, say) rather than a path
+    /// to the element itself, so it matches a different element than the one selected.
+    var containerIsEnclosing = false
     /// Starts at the closest container that has, or directly holds, a uniquely identified element.
     var fromAnchor: Snippet?
     /// The full path from the window.
@@ -52,13 +55,15 @@ struct QueryBuilder {
     }
 
     func queries(for id: Int) -> GeneratedQueries {
-        let container = containerSnippet(for: id)
+        let enclosing = enclosingItemSnippet(for: id)
+        let container = enclosing ?? containerSnippet(for: id)
         let hierarchy = hierarchySnippet(for: id)
         return GeneratedQueries(
             byIdentifier: identifierSnippet(for: tree.node(id)),
             fromContainer: container,
             // The container query falls back to exactly the full path when nothing is unique.
-            hasUniqueContainer: container.code != hierarchy.code,
+            hasUniqueContainer: enclosing != nil || container.code != hierarchy.code,
+            containerIsEnclosing: enclosing != nil,
             fromAnchor: anchoredSnippet(for: id),
             byHierarchy: hierarchy,
             breadcrumb: breadcrumb(for: id)
@@ -110,6 +115,55 @@ struct QueryBuilder {
                 .compactMap { $0 }.joined(separator: " ")
         }
         return Snippet(code: wrap(expression), note: note)
+    }
+
+    // MARK: - Enclosing item
+
+    /// The query for the item that holds `id`, when there clearly is one: the nearest ancestor with its own identifier that
+    /// is one of a numbered sequence (`Identifier:ResultCell,Section:0,Row:3`, `row-2`, `tile_7`) and has the same hit box
+    /// as the element. Spotlight's result cells and a list's rows are like that; a one-off identified container isn't.
+    func enclosingItemSnippet(for id: Int) -> Snippet? {
+        guard let item = enclosingItem(for: id), let key = item.stableIdentifier else { return nil }
+        let name = item.kind.displayName.lowercased()
+        return Snippet(code: wrap("app.\(item.kind.queryName)[\(Self.literal(key))]"),
+                       note: "The \(name) holding this element, one of a numbered sequence with the same bounds. It matches the whole item, not just this element.")
+    }
+
+    func enclosingItem(for id: Int) -> UINode? {
+        guard let frame = tree.node(id).frame else { return nil }
+        for ancestor in tree.ancestors(of: id).reversed() {
+            // Wrappers between the element and its item are often a little smaller than either, so keep looking upward.
+            guard let ancestorFrame = ancestor.frame, Self.overlap(ancestorFrame, frame) >= Self.sameHitBox,
+                  tree.isInQueryScope(ancestor.id), let key = ancestor.stableIdentifier,
+                  isSequence(key, kind: ancestor.kind), keyMatches(kind: ancestor.kind, key: key).count == 1 else { continue }
+            return ancestor
+        }
+        return nil
+    }
+
+    /// How much two hit boxes must overlap (intersection over union) to count as the same.
+    static let sameHitBox: CGFloat = 0.85
+
+    static func overlap(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let intersection = a.intersection(b)
+        guard !intersection.isNull, intersection.width > 0, intersection.height > 0 else { return 0 }
+        let overlap = intersection.width * intersection.height
+        let union = a.width * a.height + b.width * b.height - overlap
+        return union > 0 ? overlap / union : 0
+    }
+
+    /// Whether `identifier` has numbers in it and at least one other element of the same type has the same identifier with
+    /// different numbers: `…Section:0,Row:3` with `…Section:0,Row:1`, or `…Section:1,Row:0`.
+    private func isSequence(_ identifier: String, kind: ElementKind) -> Bool {
+        let template = Self.numberTemplate(identifier)
+        guard template != identifier else { return false }
+        return nodesInScope { $0.kind.typeName == kind.typeName && $0.identifier != identifier
+            && $0.stableIdentifier.map(Self.numberTemplate) == template }.count >= 1
+    }
+
+    /// `row-12` → `row-#`: every run of digits becomes `#`.
+    static func numberTemplate(_ identifier: String) -> String {
+        identifier.replacingOccurrences(of: #"\d+"#, with: "#", options: .regularExpression)
     }
 
     // MARK: - By hierarchy
