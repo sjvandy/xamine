@@ -85,7 +85,7 @@ final class InspectorModel {
 
     func load(_ target: PickedWindow) async {
         deviceLaunch = nil
-        self.target = target
+        self.target = WindowLocator.owningWindow(of: target)
         device = nil
         selectedID = nil
         hoveredID = nil

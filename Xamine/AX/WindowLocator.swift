@@ -34,6 +34,28 @@ enum WindowLocator {
         }
     }
 
+    /// A sheet or panel that the picker found as its own on-screen window is part of an app window in accessibility and
+    /// isn't in the app's window list, so scanning it would walk (and capture) mismatched windows. Returns the app
+    /// window that contains it, or `target` unchanged when it already is one.
+    static func owningWindow(of target: PickedWindow) -> PickedWindow {
+        guard target.isAppWindow else { return target }
+        let windows = AXElement.application(pid: target.pid).windows
+        guard !windows.contains(where: { $0.windowID == target.windowID }) else { return target }
+        let center = CGPoint(x: target.bounds.midX, y: target.bounds.midY)
+        let owner = windows
+            .compactMap { window -> (id: CGWindowID, frame: CGRect, title: String?)? in
+                guard let id = window.windowID, let frame = window.frame, frame.contains(center) else { return nil }
+                return (id, frame, window.attribute(kAXTitleAttribute) as? String)
+            }
+            .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        guard let owner else { return target }
+        var resolved = target
+        resolved.windowID = owner.id
+        resolved.bounds = owner.frame
+        resolved.title = owner.title ?? target.title
+        return resolved
+    }
+
     /// Polls until the app has a window, for just after launching it.
     static func waitForWindow(of bundleID: String, title: String? = nil, timeout: Duration = .seconds(10)) async -> PickedWindow? {
         let deadline = ContinuousClock.now + timeout
