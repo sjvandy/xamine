@@ -47,7 +47,12 @@ final class InspectorModel {
     /// Layers under the cursor on the screenshot, outermost first; `hoveredID` is one of them.
     private(set) var hoverStack: [Int] = []
     var expandedIDs: Set<Int> = []
-    var searchText = ""
+    /// While filtering, every match is open; these are the rows the user has closed with their disclosure triangle.
+    var filterCollapsedIDs: Set<Int> = []
+    var searchText = "" {
+        didSet { if searchText != oldValue { filterCollapsedIDs = [] } }
+    }
+    var isFiltering: Bool { !searchText.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var snippetAction: SnippetAction = SnippetAction(rawValue: UserDefaults.standard.string(forKey: "snippetAction") ?? "") ?? .none {
         didSet { UserDefaults.standard.set(snippetAction.rawValue, forKey: "snippetAction") }
@@ -232,50 +237,82 @@ final class InspectorModel {
 
     /// Rows currently visible in the outline, honoring expansion and the search filter.
     var visibleRows: [Row] {
-        guard let tree, let root = tree.root else { return [] }
-        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let tree else { return [] }
+        return Self.rows(in: tree, query: searchText, expanded: expandedIDs, collapsedInFilter: filterCollapsedIDs, selected: selectedID)
+    }
+
+    /// The outline for `tree`. Without a filter, rows below an expanded node. With one, every match plus its ancestors,
+    /// open unless collapsed; the selected element and its ancestors are always included, so picking something in the
+    /// screenshot that the filter doesn't match still shows (and scrolls to) its row.
+    static func rows(in tree: UITree, query rawQuery: String, expanded: Set<Int>, collapsedInFilter: Set<Int>, selected: Int?) -> [Row] {
+        guard let root = tree.root else { return [] }
+        let query = rawQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        var rows: [Row] = []
 
         if !query.isEmpty {
-            // Show every match plus its ancestors, fully expanded.
             var included = Set<Int>()
-            for node in tree.nodes where Self.matches(node, query) {
-                included.insert(node.id)
-                var parent = node.parentID
-                while let id = parent, included.insert(id).inserted { parent = tree.node(id).parentID }
+            func include(_ id: Int) {
+                var current: Int? = id
+                while let next = current, included.insert(next).inserted { current = tree.node(next).parentID }
             }
-            var rows: [Row] = []
+            for node in tree.nodes where matches(node, query) { include(node.id) }
+            if let selected, selected < tree.nodes.count { include(selected) }
             func walk(_ id: Int) {
                 guard included.contains(id) else { return }
                 rows.append(Row(id: id, depth: tree.node(id).depth))
-                tree.node(id).childIDs.forEach(walk)
+                if !collapsedInFilter.contains(id) { tree.node(id).childIDs.forEach(walk) }
             }
             walk(root.id)
             return rows
         }
 
-        var rows: [Row] = []
         func walk(_ id: Int) {
             let node = tree.node(id)
             rows.append(Row(id: id, depth: node.depth))
-            if expandedIDs.contains(id) { node.childIDs.forEach(walk) }
+            if expanded.contains(id) { node.childIDs.forEach(walk) }
         }
         walk(root.id)
         return rows
     }
 
-    private static func matches(_ node: UINode, _ query: String) -> Bool {
+    static func matches(_ node: UINode, _ query: String) -> Bool {
         [node.identifier, node.title, node.label, node.value, node.placeholder, node.kind.displayName, node.role]
             .contains { $0?.lowercased().contains(query) == true }
     }
 
+    /// Whether `id`'s children are showing in the outline.
+    func isExpanded(_ id: Int) -> Bool {
+        isFiltering ? !filterCollapsedIDs.contains(id) : expandedIDs.contains(id)
+    }
+
     func toggleExpanded(_ id: Int) {
-        if expandedIDs.contains(id) { expandedIDs.remove(id) } else { expandedIDs.insert(id) }
+        if isFiltering {
+            if filterCollapsedIDs.contains(id) { filterCollapsedIDs.remove(id) } else { filterCollapsedIDs.insert(id) }
+        } else if expandedIDs.contains(id) {
+            expandedIDs.remove(id)
+        } else {
+            expandedIDs.insert(id)
+        }
+    }
+
+    /// Opens `id` and everything below it.
+    func expandAll(below id: Int) {
+        guard let tree else { return }
+        var stack = [id]
+        while let next = stack.popLast() {
+            expandedIDs.insert(next)
+            filterCollapsedIDs.remove(next)
+            stack.append(contentsOf: tree.node(next).childIDs)
+        }
     }
 
     /// Expands every ancestor of `id` so its row is visible.
     private func reveal(_ id: Int) {
         guard let tree, id < tree.nodes.count else { return }
-        for ancestor in tree.ancestors(of: id) { expandedIDs.insert(ancestor.id) }
+        for ancestor in tree.ancestors(of: id) {
+            expandedIDs.insert(ancestor.id)
+            filterCollapsedIDs.remove(ancestor.id)
+        }
     }
 
     // MARK: - Queries

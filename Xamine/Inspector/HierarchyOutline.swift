@@ -12,7 +12,7 @@ struct HierarchyOutline: View {
                 List(model.visibleRows, selection: Binding(get: { model.selectedID }, set: { id in if id != model.selectedID { model.select(id) } })) { row in
                     HierarchyRow(
                         node: tree.node(row.id),
-                        isExpanded: model.expandedIDs.contains(row.id) || !model.searchText.isEmpty,
+                        isExpanded: model.isExpanded(row.id),
                         toggle: { model.toggleExpanded(row.id) }
                     )
                     // Hover is read in its own view, so moving the mouse redraws one row instead of the whole list.
@@ -25,7 +25,7 @@ struct HierarchyOutline: View {
                     }
                     .contextMenu {
                         HierarchyContextMenu(node: tree.node(row.id), builder: builder, copy: model.copy,
-                                             expandAll: { expandAll(below: row.id) })
+                                             expandAll: { model.expandAll(below: row.id) })
                     }
                 }
                 .listStyle(.inset)
@@ -47,15 +47,6 @@ struct HierarchyOutline: View {
             ContentUnavailableView("Couldn't Read UI", systemImage: "exclamationmark.triangle", description: Text(error))
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func expandAll(below id: Int) {
-        guard let tree = model.tree else { return }
-        var stack = [id]
-        while let next = stack.popLast() {
-            model.expandedIDs.insert(next)
-            stack.append(contentsOf: tree.node(next).childIDs)
         }
     }
 }
