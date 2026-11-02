@@ -109,6 +109,9 @@ private func makeTree(_ specs: [(parent: Int?, type: String, identifier: String?
             (0, "cell", "row-1", nil),            // 8 identified cell
             (0, "cell", nil, nil),                // 9 anonymous cell
             (0, "slider", nil, nil),              // 10 slider
+            (0, "scrollBar", nil, nil),           // 11 macOS scroll bar
+            (11, "incrementArrow", nil, nil),     // 12 its arrows
+            (11, "decrementArrow", nil, nil),     // 13
         ])
         let kept = tree.nodes.filter(\.isInteractive).map(\.id)
         #expect(kept == [1, 6, 7, 8, 10])

@@ -100,6 +100,8 @@ struct UINode: Identifiable, Hashable, Sendable {
         case .input, .link:
             return true
         case .control:
+            // Parts of a scroll bar or slider thumb; they come with the control, not as something to act on.
+            if ["scrollBar", "incrementArrow", "decrementArrow", "valueIndicator", "handle"].contains(kind.typeName) { return false }
             if ["AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton"].contains(subrole) { return false }
             // A button with nothing to identify it can't be targeted by a test, only by position.
             return hasSelector || !["button", "image", "other"].contains(kind.typeName)
