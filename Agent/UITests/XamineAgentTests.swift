@@ -132,7 +132,12 @@ final class XamineAgentTests: XCTestCase {
 
         case "/foreground":
             let candidates = (query["candidates"] ?? "").split(separator: ",").map(String.init)
-            let foreground = candidates.first { XCUIApplication(bundleIdentifier: $0).state == .runningForeground }
+            // Some apps report .runningForeground without being on screen (CarPlay does on the Home Screen), so a
+            // candidate also needs a window to count.
+            let foreground = candidates.first {
+                let app = XCUIApplication(bundleIdentifier: $0)
+                return app.state == .runningForeground && app.windows.firstMatch.exists
+            }
             return json(["bundleId": foreground ?? "com.apple.springboard"])
 
         case "/screenshot":

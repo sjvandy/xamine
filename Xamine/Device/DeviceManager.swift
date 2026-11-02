@@ -128,7 +128,7 @@ final class DeviceManager {
 
     /// Bundle IDs to check, in order, when detecting which app is in front.
     var foregroundCandidates: [String] {
-        let installed = apps.map(\.bundleID).filter { !$0.contains("xctrunner") && !$0.hasPrefix("com.xamine.agent") }
+        let installed = apps.map(\.bundleID).filter { !$0.contains("xctrunner") && !$0.hasPrefix("com.xamine.agent") && $0 != "com.apple.CarPlayApp" }
         var seen = Set<String>()
         return (Self.commonApps + installed).filter { seen.insert($0).inserted }
     }
