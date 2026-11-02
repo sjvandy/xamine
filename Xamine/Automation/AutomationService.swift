@@ -400,7 +400,7 @@ final class AutomationService {
             case .found(let match):
                 return Target(snapshot: current, nodeID: match, query: builder.bestQuery(for: id))
             case .changed(let query):
-                throw Failure(code: "snapshotChanged", message: "\(ref) (\(describe(snapshot.tree.node(id)))) isn't there any more: the UI changed since snapshot \(snapshot.id), and \(query) no longer finds exactly one element. Take a new snapshot, or pass a query.")
+                throw Failure(code: "snapshotChanged", message: "\(describe(snapshot.tree.node(id))) isn't there any more: the UI changed since snapshot \(snapshot.id), and \(query) no longer finds exactly one element. Take a new snapshot, or pass a query.")
             }
         }
         if let query = params["query"]?.string, !query.isEmpty {
