@@ -7,7 +7,9 @@ VERSION="$(grep -E '^\s*MARKETING_VERSION:' "$ROOT/project.yml" | sed -E 's/.*"(
 DERIVED_DATA="/tmp/xamine-build"
 APP="$DERIVED_DATA/Build/Products/Release/Xamine.app"
 STAGING="$BUILD/dmg"
-DMG="$BUILD/Xamine-$VERSION.dmg"
+# DMG_SUFFIX labels a pre-release build (e.g. -beta.1) without changing the app's version number.
+SUFFIX="${DMG_SUFFIX:-}"
+DMG="$BUILD/Xamine-$VERSION$SUFFIX.dmg"
 
 cd "$ROOT"
 xcodegen generate
@@ -33,5 +35,5 @@ ditto "$APP" "$STAGING/Xamine.app"
 ln -s /Applications "$STAGING/Applications"
 cp "$ROOT/Packaging/README.txt" "$STAGING/README.txt"
 
-hdiutil create -volname "Xamine $VERSION" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
+hdiutil create -volname "Xamine $VERSION${SUFFIX//[-.]/ }" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
 echo "$DMG"
