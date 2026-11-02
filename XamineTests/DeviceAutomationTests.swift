@@ -106,3 +106,52 @@ import Testing
         #expect(!UINode.isSymbolName("drink-latte"))
     }
 }
+
+/// Overlays such as Spotlight, Siri and the keyboard are SpringBoard windows above the Home Screen's window.
+@Suite struct WindowStackingTests {
+    /// application ▸ window 0 (Home Screen: a small icon) · window 1 (Spotlight: a full-screen wrapper and a results card
+    /// drawn over the icon) · window 2 (a transparent full-screen window).
+    let tree: UITree = {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"other","frame":[0,0,402,874],"children":[
+              {"type":"icon","frame":[230,170,60,60],"label":"Calendar","children":[]}]}]},
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"other","frame":[0,0,402,874],"children":[
+              {"type":"other","frame":[16,120,370,400],"identifier":"results","children":[
+                {"type":"button","frame":[220,160,80,80],"label":"Instagram","children":[]}]}]}]},
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"other","frame":[0,0,402,874],"children":[]}]}
+        ]}
+        """
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        return root.makeTree(appName: "SpringBoard", bundleID: "com.apple.springboard")
+    }()
+
+    @Test func overlayBeatsTheIconUnderneath() {
+        // Over the Instagram result: the result, not the Calendar icon beneath it.
+        #expect(tree.hitTest(CGPoint(x: 250, y: 190))?.label == "Instagram")
+        // Over the card but not a result: the card.
+        #expect(tree.hitTest(CGPoint(x: 40, y: 300))?.identifier == "results")
+        // The layers under the pointer are all from the overlay's window.
+        let stack = tree.hitStack(CGPoint(x: 250, y: 190)).map { tree.node($0).label ?? tree.node($0).identifier ?? tree.node($0).kind.typeName }
+        #expect(!stack.contains("Calendar"))
+    }
+
+    @Test func fallsBackToTheWindowBelowWhenTheOverlayIsEmptyThere() {
+        // Outside the results card, the icon area is only covered by transparent wrappers.
+        #expect(tree.hitTest(CGPoint(x: 250, y: 600))?.kind.typeName == "other")   // the Home Screen's wrapper
+        #expect(tree.hitTest(CGPoint(x: 250, y: 100))?.kind.typeName == "other")
+    }
+
+    @Test func singleWindowAppsKeepLargeViewsAsTargets() throws {
+        let json = """
+        {"type":"application","frame":[0,0,402,874],"children":[
+          {"type":"window","frame":[0,0,402,874],"children":[
+            {"type":"scrollView","frame":[0,0,402,874],"identifier":"menu-list","children":[]}]}]}
+        """
+        let tree = try JSONDecoder().decode(AgentNode.self, from: Data(json.utf8)).makeTree(appName: "App", bundleID: "x")
+        #expect(tree.hitTest(CGPoint(x: 100, y: 100))?.identifier == "menu-list")
+    }
+}
