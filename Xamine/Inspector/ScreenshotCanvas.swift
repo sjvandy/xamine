@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// The captured window, with hover and selection highlights. Clicking an element selects it and copies its query.
 struct ScreenshotCanvas: View {
@@ -43,6 +44,7 @@ struct ScreenshotCanvas: View {
                 }
                 .onTapGesture { location in
                     // Click picks the layer chosen with ↑/↓, or the deepest element under the cursor.
+                    TipEvents.clickedScreenshot.sendDonation()
                     model.hoverScreenshot(at: globalPoint(location, tree, scale))
                     if let id = model.hoveredID { model.select(id) }
                 }
@@ -58,6 +60,7 @@ struct ScreenshotCanvas: View {
                     return .handled
                 }
                 .help("Click an element to select it and copy its query")
+                .popoverTip(ClickScreenshotTip(), arrowEdge: .trailing)
                 .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             } else if model.isLoading {
                 ProgressView("Scanning…").frame(maxWidth: .infinity, maxHeight: .infinity)

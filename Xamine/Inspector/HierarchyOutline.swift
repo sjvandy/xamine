@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// The UI dump: one row per element, indented by depth, with symbols, labels and identifier chips.
 struct HierarchyOutline: View {
@@ -24,8 +25,15 @@ struct HierarchyOutline: View {
                         if inside { model.hoveredID = row.id } else if model.hoveredID == row.id { model.hoveredID = nil }
                     }
                     .contextMenu {
-                        HierarchyContextMenu(node: tree.node(row.id), builder: builder, copy: model.copy,
-                                             expandAll: { model.expandAll(below: row.id) })
+                        HierarchyContextMenu(node: tree.node(row.id), builder: builder,
+                                             copy: { text, message in
+                                                 TipEvents.usedContextMenu.sendDonation()
+                                                 model.copy(text, message: message)
+                                             },
+                                             expandAll: {
+                                                 TipEvents.usedContextMenu.sendDonation()
+                                                 model.expandAll(below: row.id)
+                                             })
                     }
                 }
                 .listStyle(.inset)
@@ -42,6 +50,12 @@ struct HierarchyOutline: View {
                     .padding(6)
                     .background(.regularMaterial, in: .capsule)
                     .padding(8)
+                    .popoverTip(ContextMenuTip(), arrowEdge: .top)
+            }
+            // The search field lives in the window toolbar, so its tip points at the top of the list beneath it.
+            .overlay(alignment: .top) {
+                Color.clear.frame(width: 1, height: 1)
+                    .popoverTip(FilterElementsTip(), arrowEdge: .top)
             }
         } else if let error = model.errorMessage {
             ContentUnavailableView("Couldn't Read UI", systemImage: "exclamationmark.triangle", description: Text(error))

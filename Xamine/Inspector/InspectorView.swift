@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// Screenshot on the left; hierarchy (top) and queries (bottom) on the right.
 struct InspectorView: View {
@@ -40,11 +41,15 @@ struct InspectorView: View {
             }
         }
         .animation(.snappy, value: model.toast)
+        .onChange(of: model.searchText) { _, text in
+            if !text.isEmpty { TipEvents.usedFilter.sendDonation() }
+        }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Filter elements")
         .toolbar {
             ToolbarItem(placement: .navigation) { targetLabel }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
+                    TipEvents.rescanned.sendDonation()
                     Task { await model.rescan() }
                 } label: {
                     Label("Re-scan", systemImage: "arrow.clockwise")
@@ -52,11 +57,13 @@ struct InspectorView: View {
                 .keyboardShortcut("r")
                 .disabled(model.isLoading || model.deviceLaunch != nil)
                 .help("Re-capture the window and re-read its hierarchy (⌘R)")
+                .popoverTip(RescanTip(), arrowEdge: .bottom)
 
                 Button(action: pickAnother) {
                     Label("Pick Window", systemImage: "viewfinder")
                 }
                 .help("Pick another window (⌘⇧X)")
+                .popoverTip(PickWindowTip(), arrowEdge: .bottom)
             }
         }
     }
@@ -64,6 +71,7 @@ struct InspectorView: View {
     @ViewBuilder private var targetLabel: some View {
         if let summary = model.summary {
             Button {
+                TipEvents.copiedBundleID.sendDonation()
                 model.copy(summary.bundleID ?? summary.name, message: "Copied bundle ID")
             } label: {
                 HStack(spacing: 8) {
@@ -78,6 +86,7 @@ struct InspectorView: View {
                 .padding(.horizontal, 4)
             }
             .help([summary.detail, "Click to copy the bundle ID"].compactMap { $0 }.joined(separator: " · "))
+            .popoverTip(CopyBundleIDTip(), arrowEdge: .top)
         }
     }
 }

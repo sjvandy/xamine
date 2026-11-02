@@ -124,7 +124,7 @@ xcodegen generate
 open Xamine.xcodeproj
 ```
 
-Xamine needs **Accessibility** and **Screen Recording** permission; it walks you through granting them on first launch. It can't be sandboxed, because the Accessibility API can't read other apps from inside the sandbox.
+Xamine needs **Accessibility** and **Screen Recording** permission; a short welcome tour on first launch walks you through the app and granting them (replay it any time from the menu bar's Welcome Tour…). Xamine also suggests features you haven't tried yet with occasional tips. It can't be sandboxed, because the Accessibility API can't read other apps from inside the sandbox.
 
 ## Releases
 

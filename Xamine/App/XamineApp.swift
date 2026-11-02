@@ -65,11 +65,7 @@ private struct MenuContent: View {
 
         Divider()
         Button("Set Up AI Agents…") { Task { await AgentIntegration.setUpAll() } }
-
-        #if DEBUG
-        Divider()
-        Toggle("Preview AI Agent Icon", isOn: Bindable(state).isAgentActive)
-        #endif
+        Button("Welcome Tour…") { state.showOnboarding(replay: true) }
 
         Divider()
         if !state.permissions.allGranted {

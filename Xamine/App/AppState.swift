@@ -22,6 +22,7 @@ final class AppState {
     @ObservationIgnored private var windowCloseObserver: NSObjectProtocol?
 
     func didLaunch() {
+        TipEvents.configure()
         // AI agents and scripts drive Xamine through the `xamine` helper, which talks to this socket.
         automation.onActivityChange = { [weak self] active in self?.isAgentActive = active }
         automation.start()
@@ -45,7 +46,7 @@ final class AppState {
             picker.setDevices(pickerDevices)
         }
         devices.watchForDevices()
-        if !permissions.allGranted {
+        if WelcomeFlow.shouldShow(permissionsGranted: permissions.allGranted) {
             showOnboarding()
         } else if UserDefaults.standard.bool(forKey: "pickOnLaunch") {
             startPicking()
@@ -62,6 +63,7 @@ final class AppState {
     }
 
     func startPicking() {
+        TipEvents.pickedWindow.sendDonation()
         permissions.refresh()
         guard permissions.allGranted else {
             showOnboarding()
@@ -131,6 +133,7 @@ final class AppState {
     // MARK: - Windows
 
     func showInspector() {
+        TipEvents.noteInspectorOpened()
         let window = inspectorWindow ?? makeWindow(
             title: "Xamine",
             size: NSSize(width: 1280, height: 800),
@@ -175,11 +178,18 @@ final class AppState {
         Task { await inspector.loadDevice(inspection) }
     }
 
-    func showOnboarding() {
-        let window = onboardingWindow ?? makeWindow(
+    /// Shows the welcome tour. `replay` starts it from the first page even if it has been seen before.
+    func showOnboarding(replay: Bool = false) {
+        if let existing = onboardingWindow, existing.isVisible, !replay {
+            present(existing)
+            return
+        }
+        onboardingWindow?.close()
+        let window = makeWindow(
             title: "Welcome to Xamine",
-            size: NSSize(width: 480, height: 360),
-            content: OnboardingView(permissions: permissions) { [weak self] in
+            size: NSSize(width: 560, height: 460),
+            content: OnboardingView(permissions: permissions, startPage: replay ? .welcome : WelcomeFlow.startPage()) { [weak self] in
+                WelcomeFlow.markCompleted()
                 self?.onboardingWindow?.close()
                 self?.startPicking()
             },

@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// Bottom-right pane: the two copyable XCUITest queries plus every attribute of the selected element.
 struct ElementDetail: View {
@@ -15,14 +16,15 @@ struct ElementDetail: View {
                         symbol: "tag",
                         snippet: queries.byIdentifier,
                         emptyMessage: "This element has no identifier or label. Use the hierarchy query instead.",
-                        copy: { model.copy($0, message: "Copied identifier query") }
+                        copy: { copyQuery($0, message: "Copied identifier query") }
                     )
+                    .popoverTip(CopyQueryTip(), arrowEdge: .leading)
                     CommandCard(
                         title: "From unique container",
                         symbol: "square.stack.3d.down.right",
                         snippet: queries.fromContainer,
                         emptyMessage: "",
-                        copy: { model.copy($0, message: "Copied container query") }
+                        copy: { copyQuery($0, message: "Copied container query") }
                     )
                     .help("Hierarchy steps from the closest container whose type appears once in the window. Indexes count siblings of the same type; XCTest sometimes skips accessibility nodes the raw tree shows. When the element sits in a numbered item with the same bounds (a result cell, a list row), this is that item's own query.")
                     CommandCard(
@@ -30,7 +32,7 @@ struct ElementDetail: View {
                         symbol: "scope",
                         snippet: queries.fromAnchor,
                         emptyMessage: "No container above this element has, or directly holds, a uniquely identified element.",
-                        copy: { model.copy($0, message: "Copied anchored query") }
+                        copy: { copyQuery($0, message: "Copied anchored query") }
                     )
                     .help("Hierarchy steps from the closest container that has a unique identifier or label, or that directly holds a child with a unique identifier.")
                     attributes(node)
@@ -41,6 +43,11 @@ struct ElementDetail: View {
             ContentUnavailableView("Select an Element", systemImage: "cursorarrow.click.2",
                                    description: Text("Click an element in the screenshot or the hierarchy to see ways to query it."))
         }
+    }
+
+    private func copyQuery(_ code: String, message: String) {
+        TipEvents.copiedQuery.sendDonation()
+        model.copy(code, message: message)
     }
 
     private func header(_ node: UINode, _ queries: GeneratedQueries) -> some View {
