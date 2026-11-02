@@ -137,6 +137,44 @@ struct UITree: Sendable {
         return false
     }
 
+    /// Some home screen widgets report the frames of what they draw relative to the widget itself, not the screen, so
+    /// their buttons and text come out far from where they are (a DOOR widget's buttons landed 90pt up and 27pt left).
+    /// For each `icon` (that's what SpringBoard calls a widget or app) whose contents mostly lie outside its frame yet
+    /// all fit once shifted by its origin, shift the ones outside. Scrolling content that merely overhangs a container
+    /// never qualifies, since most of it must be outside and every outsider must land inside.
+    mutating func moveWidgetContentsOntoTheScreen() {
+        for container in nodes where container.kind.typeName == "icon" {
+            guard let frame = nodes[container.id].frame, frame.width >= 40, frame.height >= 40,
+                  frame.minX != 0 || frame.minY != 0 else { continue }
+            let inner = descendantIDs(of: container.id).filter { id in
+                guard let f = nodes[id].frame, f.width > 0, f.height > 0 else { return false }
+                return !nodes[id].isScrollIndicator
+            }
+            guard inner.count >= 3 else { continue }
+            let loose = frame.insetBy(dx: -2, dy: -2)
+            let outside = inner.filter { !loose.contains(nodes[$0].frame!) }
+            guard outside.count * 2 >= inner.count else { continue }
+            let shifted = outside.filter { loose.contains(nodes[$0].frame!.offsetBy(dx: frame.minX, dy: frame.minY)) }
+            guard shifted.count == outside.count else { continue }
+            // Only the nodes that were outside: a widget can mix both kinds (the Lock Screen's Calendar widget has a
+            // wrapper in screen coordinates around text measured from the widget), and shifting the others
+            // would send them off the screen.
+            for id in outside {
+                nodes[id].frame = nodes[id].frame?.offsetBy(dx: frame.minX, dy: frame.minY)
+            }
+        }
+    }
+
+    private func descendantIDs(of id: Int) -> [Int] {
+        var result: [Int] = []
+        var stack = nodes[id].childIDs
+        while let next = stack.popLast() {
+            result.append(next)
+            stack.append(contentsOf: nodes[next].childIDs)
+        }
+        return result
+    }
+
     /// Every layer under `point`, outermost first: the deepest hit plus each ancestor whose frame also contains the point.
     func hitStack(_ point: CGPoint) -> [Int] {
         guard let deepest = hitTest(point) else { return [] }

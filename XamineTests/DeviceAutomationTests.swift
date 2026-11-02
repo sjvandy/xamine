@@ -217,3 +217,80 @@ import Testing
         #expect(tree.preferredLayer(in: tree.hitStack(CGPoint(x: 170, y: 30))).map { tree.node($0).label } == "Info")
     }
 }
+
+/// Some widgets (DOOR's) report what they draw relative to the widget, not the screen.
+@Suite struct WidgetFrameTests {
+    private func tree(_ json: String) -> UITree {
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data(json.utf8))
+        return root.makeTree(appName: "SpringBoard", bundleID: "com.apple.springboard")
+    }
+
+    @Test func widgetContentsInLocalCoordinatesMoveOntoTheScreen() {
+        // The widget is at (28, 91), 347x165. Its two buttons and image carry frames measured from the widget's corner.
+        let tree = tree("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"icon","frame":[28,91,347,165],"label":"DOOR","children":[
+            {"type":"other","frame":[0,0,347,165],"children":[
+              {"type":"image","frame":[10,10,40,40],"label":"LatchIcon","children":[]},
+              {"type":"button","frame":[12,34,162,122],"label":"2176","children":[]},
+              {"type":"button","frame":[178,34,163,122],"label":"1265- Lower Elevator Lobby","children":[]}]}]}]}]}
+        """)
+        let button = tree.nodes.first { $0.label == "1265- Lower Elevator Lobby" }!
+        #expect(button.frame == CGRect(x: 206, y: 125, width: 163, height: 122))
+        #expect(tree.nodes.first { $0.label == "2176" }!.frame == CGRect(x: 40, y: 125, width: 162, height: 122))
+        // Clicking where the button is drawn now finds it.
+        #expect(tree.hitTest(CGPoint(x: 280, y: 190))?.label == "1265- Lower Elevator Lobby")
+    }
+
+    @Test func contentAlreadyOnTheScreenIsLeftAlone() {
+        let tree = tree("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"icon","frame":[210,88,168,191],"label":"Calendar","children":[
+            {"type":"other","frame":[212,90,164,178],"children":[
+              {"type":"staticText","frame":[224,100,60,20],"label":"SUNDAY","children":[]},
+              {"type":"staticText","frame":[224,200,120,40],"label":"Weekly Check-In","children":[]},
+              {"type":"image","frame":[227,222,134,88],"children":[]}]}]}]}]}
+        """)
+        #expect(tree.nodes.first { $0.label == "SUNDAY" }!.frame == CGRect(x: 224, y: 100, width: 60, height: 20))
+        #expect(tree.nodes.first { $0.kind.typeName == "image" }!.frame == CGRect(x: 227, y: 222, width: 134, height: 88))
+    }
+
+    @Test func scrollingContentThatOverhangsIsNotMoved() {
+        // A widget stack whose pages sit side by side: one page is on the widget, the others are beside it.
+        let tree = tree("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"icon","frame":[28,91,330,165],"label":"Stack","children":[
+            {"type":"button","frame":[28,91,330,165],"label":"Page 1","children":[]},
+            {"type":"button","frame":[358,91,330,165],"label":"Page 2","children":[]},
+            {"type":"button","frame":[688,91,330,165],"label":"Page 3","children":[]}]}]}]}
+        """)
+        #expect(tree.nodes.first { $0.label == "Page 2" }!.frame == CGRect(x: 358, y: 91, width: 330, height: 165))
+    }
+
+    @Test func otherAppsAreNeverTouched() {
+        let root = try! JSONDecoder().decode(AgentNode.self, from: Data("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"icon","frame":[28,91,330,165],"label":"X","children":[
+            {"type":"button","frame":[5,5,50,50],"label":"a","children":[]},
+            {"type":"button","frame":[60,5,50,50],"label":"b","children":[]},
+            {"type":"button","frame":[115,5,50,50],"label":"c","children":[]}]}]}]}
+        """.utf8))
+        let tree = root.makeTree(appName: "Other", bundleID: "com.example.other")
+        #expect(tree.nodes.first { $0.label == "a" }!.frame == CGRect(x: 5, y: 5, width: 50, height: 50))
+    }
+
+    @Test func aWidgetMixingBothKindsOfFramesOnlyMovesTheLocalOnes() {
+        // The Lock Screen's Calendar widget: a wrapper already in screen coordinates around text measured from the widget.
+        let tree = tree("""
+        {"type":"application","frame":[0,0,402,874],"children":[{"type":"window","frame":[0,0,402,874],"children":[
+          {"type":"icon","frame":[28,679,166,90],"label":"Calendar","children":[
+            {"type":"other","frame":[30,681,162,72],"children":[
+              {"type":"staticText","frame":[7,5,80,20],"label":"Tomorrow","children":[]},
+              {"type":"staticText","frame":[15,26,95,20],"label":"11 – 11:30AM","children":[]},
+              {"type":"staticText","frame":[15,46,128,20],"label":"Weekly Check-In","children":[]}]}]}]}]}
+        """)
+        #expect(tree.nodes.first { $0.kind.typeName == "other" }!.frame == CGRect(x: 30, y: 681, width: 162, height: 72))
+        #expect(tree.nodes.first { $0.label == "Tomorrow" }!.frame == CGRect(x: 35, y: 684, width: 80, height: 20))
+        #expect(tree.nodes.first { $0.label == "Weekly Check-In" }!.frame == CGRect(x: 43, y: 725, width: 128, height: 20))
+    }
+}

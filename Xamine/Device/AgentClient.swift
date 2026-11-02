@@ -159,6 +159,8 @@ struct AgentNode: Decodable, Sendable {
         }
         visit(self, parentID: nil, depth: 0)
         let screen = nodes.first?.frame ?? .zero
-        return UITree(nodes: nodes, appName: appName, bundleID: bundleID, platform: .iOSDevice, windowFrame: screen)
+        var tree = UITree(nodes: nodes, appName: appName, bundleID: bundleID, platform: .iOSDevice, windowFrame: screen)
+        if bundleID == "com.apple.springboard" { tree.moveWidgetContentsOntoTheScreen() }
+        return tree
     }
 }
