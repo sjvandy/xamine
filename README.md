@@ -13,11 +13,11 @@ A menu-bar app for macOS that inspects any app's UI hierarchy and generates XCUI
 - The inspector shows the window screenshot, the element hierarchy, and two queries for the selected element — by identifier/label and by hierarchy position. Click a query (or an element in the screenshot) to copy it.
 - Picking the iOS Simulator window inspects the running iOS app.
 - **Inspect iOS Device…** inspects apps on a wired iPhone (or a simulator) through a small XCUITest agent that Xamine builds and runs on the device.
-- **AI agents** such as Claude Code can drive Mac apps through Xamine to write new XCUITests or find out why one fails. *Set Up AI Agents…* connects them in one click.
+- **AI agents** such as Claude Code can drive Mac, iPhone, iPad and Simulator apps through Xamine to write new XCUITests or find out why one fails. *Set Up AI Agents…* connects them in one click.
 
 ## AI agents
 
-Xamine serves an automation API that lets an agent work with any Mac app without you touching it: launch the app, read its hierarchy, click and type, and turn what it did into an XCUITest. When a UI test breaks, the agent can ask Xamine why its query no longer matches the live UI.
+Xamine serves an automation API that lets an agent work with any Mac, iPhone, iPad or Simulator app without you touching it: launch the app, read its hierarchy, click or tap and type, and turn what it did into an XCUITest. When a UI test breaks, the agent can ask Xamine why its query no longer matches the live UI.
 
 ### Setup
 
@@ -47,6 +47,7 @@ xamine help
 | Tool | What it does |
 |---|---|
 | `status`, `list_apps` | Permissions, frontmost app, running apps and their windows |
+| `list_devices`, `release_device` | Connected iPhones and iPads and available Simulators; stop Xamine's agent on a device so you can run your own UI tests there |
 | `launch_app` | Launches or activates an app by bundle ID, name or path; with several builds installed, opens the newest |
 | `snapshot`, `find_elements` | The window's hierarchy with refs (`e12`), or a search with the best query for each match |
 | `screenshot`, `get_queries` | A PNG of the window or an element; every query Xamine can generate for an element |
@@ -54,6 +55,23 @@ xamine help
 | `wait_for` | Waits for a query or text to appear or disappear, and records an assertion |
 | `recording_start`, `recording_stop` | Turns the actions in between into a complete `XCTestCase` file |
 | `resolve_query` | Evaluates a query against the live UI step by step: where it stops matching, what's there instead, and a text-free alternative |
+
+### iPhone, iPad and Simulator
+
+Pass `device` (a name or UDID from `list_devices`) on any tool call and it goes to that iPhone, iPad or Simulator instead of your Mac:
+
+```sh
+xamine list-devices
+xamine launch-app com.example.MyApp --device "iPad Mini"
+xamine snapshot --device "iPad Mini" --interactive-only
+xamine click 'app.buttons["add-to-cart-button"]' --device "iPad Mini"
+```
+
+- The first call builds, installs and starts Xamine's XCUITest agent on the device, which takes a minute the first time. Requirements are the same as for inspecting a device: Xcode, a trusted device with Developer Mode and UI Automation on.
+- Actions are real XCUITest calls made by the agent on the device: taps, typing, swipes (`scroll`), `home`, and match counts for `resolve_query`. Recordings come out as iOS code (`.tap()`, a tap before `typeText`, `swipeUp()`, `XCUIDevice.shared.press(.home)`).
+- Taps are made by query, so an element ref from before the screen changed still finds the right element. A tap on a SwiftUI toggle's row that doesn't flip it falls back to the switch inside it.
+- Spotlight is its own app, `com.apple.campo`; the inspector follows it when it's showing.
+- Quitting Xamine stops the agent on your device. If Xamine is force quit or crashes, the agent notices after 30 seconds and ends its own session, so the device doesn't stay in "Automation Running". You can run `xcodebuild test` on a device while the agent is up; use `release_device` if a run can't start.
 
 ### Examples
 
@@ -81,7 +99,8 @@ Step 2 had 1 element to choose from:
 
 ### Notes
 
-- Agents can drive **macOS apps** for now. iPhone and iPad apps are inspect-only.
+- Xamine moves the real mouse and keyboard only for Mac apps. On a device it taps through XCUITest, so the device must be unlocked.
+- iPhone and iPad layouts differ: on iPad the tabs sit in a floating bar that isn't a `tabBar`, so check generated tests on every device family they must run on.
 - Xamine moves the real mouse and types on the real keyboard while an agent drives, so leave them alone until it's done.
 - The API listens on a socket in `~/Library/Application Support/Xamine` that only your user account can open, whenever Xamine is running.
 - Running UI tests on a Mac needs Automation Mode once. If `xcodebuild test` times out enabling it, run `sudo automationmodetool enable-automationmode-without-authentication`, or run the tests once from Xcode and approve the prompt.

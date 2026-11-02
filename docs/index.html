@@ -214,7 +214,7 @@ footer a:hover { color: var(--text); }
     </nav>
 
     <header class="hero">
-        <span class="pill"><b>New in 0.5.0</b> · Built for AI agents</span>
+        <span class="pill"><b>New in 0.6.0</b> · AI agents on iPhone, iPad and Mac</span>
         <h1>Your automation companion<br><span class="grad">for Apple platforms.</span></h1>
         <p class="lead">A native macOS tool for QA and automation teams. Point at any element in your app, on your Mac, iPhone or iPad, and copy a ready-to-use XCUITest query. Or hand the job to your AI agent and get a passing UI test back.</p>
         <div class="cta">
@@ -271,7 +271,7 @@ app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">e
 
     <section id="agents">
         <h2>Let your AI agent write the UI tests</h2>
-        <p class="sub">Xamine gives Claude and other AI agents hands and eyes on your Mac apps. They explore, click and type, then hand you an XCUITest that passes, or tell you exactly why one broke.</p>
+        <p class="sub">Xamine gives Claude and other AI agents hands and eyes on your Mac, iPhone and iPad apps. They explore, tap and type, then hand you an XCUITest that passes, or tell you exactly why one broke.</p>
         <div class="steps">
             <div class="card step">
                 <h3>Set up</h3>
@@ -295,10 +295,10 @@ app.<span class="f">tables</span>.<span class="f">cells</span>.<span class="f">e
 Step 2 had 1 element to choose from:
   e0 Window title=<span class="s">"Cart"</span>   query: app.<span class="f">windows</span>[<span class="s">"Cart"</span>]
 
-<span class="c">// recorded by the agent, passing on the first run</span>
+<span class="c">// recorded by the agent on a real iPad, passing on the first run</span>
 <span class="k">let</span> drinkColdBrewButton = app.<span class="f">buttons</span>[<span class="s">"drink-cold-brew"</span>]
 XCTAssertTrue(drinkColdBrewButton.<span class="f">waitForExistence</span>(timeout: <span class="s">5</span>))
-drinkColdBrewButton.<span class="f">click</span>()</pre>
+drinkColdBrewButton.<span class="f">tap</span>()</pre>
         </div>
     </section>
 
@@ -326,7 +326,7 @@ drinkColdBrewButton.<span class="f">click</span>()</pre>
         <div class="features">
             <div class="card"><div class="icon">⌥</div><h3>Inspect what closes</h3><p><kbd>⌥⌘⇧X</kbd> inspects whatever is under the cursor without taking focus: menus, Spotlight, Control Center, the Dock and Notification Center.</p></div>
             <div class="card"><div class="icon">🎯</div><h3>Smart picks</h3><p>When an unlabeled view sits on a labeled cell, Xamine picks the cell, so your query reads well and survives layout changes.</p></div>
-            <div class="card"><div class="icon">✨</div><h3>Agent-ready</h3><p>An MCP server, a command-line tool and a Claude skill let AI agents inspect and drive Mac apps, record tests and repair failing ones.</p></div>
+            <div class="card"><div class="icon">✨</div><h3>Agent-ready</h3><p>An MCP server, a command-line tool and a Claude skill let AI agents inspect and drive Mac, iPhone, iPad and Simulator apps, record tests and repair failing ones.</p></div>
             <div class="card"><div class="icon">📱</div><h3>Simulator too</h3><p>Pick the iOS Simulator window to inspect the running app, with the same element types XCUITest sees.</p></div>
             <div class="card"><div class="icon">🔄</div><h3>Self-updating</h3><p>Check for Updates in the menu bar installs the newest release and relaunches.</p></div>
             <div class="card"><div class="icon">🔒</div><h3>Private</h3><p>Everything runs on your Mac. Accessibility and Screen Recording are the only permissions it asks for.</p></div>
@@ -335,7 +335,7 @@ drinkColdBrewButton.<span class="f">click</span>()</pre>
 
     <section id="devices">
         <h2>Now on real devices</h2>
-        <p class="sub">Version 0.4.0 inspects apps on a connected iPhone or iPad.</p>
+        <p class="sub">Inspect apps on a connected iPhone or iPad, and since 0.6.0 let your AI agent tap, type and record tests on them.</p>
         <div class="device">
             <div>
                 <h3>Pick a device from the edge of your screen</h3>
@@ -344,7 +344,9 @@ drinkColdBrewButton.<span class="f">click</span>()</pre>
                     <li>Plug in or unplug and the device list updates right away</li>
                     <li>The agent recovers when the device locks or reconnects</li>
                     <li>Portrait and landscape both line up</li>
-                    <li>Follow the foreground app, or choose one</li>
+                    <li>Follow the foreground app, or choose one, including Spotlight</li>
+                    <li>AI agents drive the device through the same agent: real XCUITest taps, swipes and typing</li>
+                    <li>Quit Xamine and the device leaves “Automation Running”, even after a force quit</li>
                 </ul>
             </div>
             <video class="device-video" controls muted playsinline preload="metadata" poster="media/ios.png" aria-label="Xamine connecting to a physical iPhone and inspecting an app">
@@ -356,7 +358,7 @@ drinkColdBrewButton.<span class="f">click</span>()</pre>
     <section class="final">
         <img class="icon" src="icon.png" alt="">
         <h2>Stop guessing at selectors</h2>
-        <p class="sub">Requires macOS with Accessibility and Screen Recording permission. Device inspection needs Xcode and a trusted device with Developer Mode on. AI agent setup needs Claude Code.</p>
+        <p class="sub">Requires macOS with Accessibility and Screen Recording permission. Device inspection needs Xcode and a trusted device with Developer Mode on. AI agent setup needs Claude Code, and agents on a device need it unlocked with UI Automation on.</p>
         <div class="cta">
             <a class="btn primary" href="https://github.com/sjvandy/xamine/releases/latest">Download Xamine</a>
             <a class="btn ghost" href="https://github.com/sjvandy/xamine#readme">Read the docs</a>
